@@ -89,6 +89,7 @@ public final class LauncherActivity extends Activity {
     private IconLoader icons;
     private Dialog dialog;
 
+    private List<AppEntry> allApps = Collections.emptyList();
     private boolean scanned;
     private boolean drawerOpen;
     private int lastDock;
@@ -290,7 +291,8 @@ public final class LauncherActivity extends Activity {
                 for (AppEntry a : apps) map.put(a.pkg, a);
                 index = map;
                 scanned = true;
-                adapter.setApps(apps);
+                allApps = apps;
+                updateGrid();
                 bindDock();
             });
         });
@@ -425,6 +427,22 @@ public final class LauncherActivity extends Activity {
         return dockPkgs[idx] == null ? null : index.get(dockPkgs[idx]);
     }
 
+    /** The full grid shows every app except the ones pinned to the dock. */
+    private void updateGrid() {
+        ArrayList<AppEntry> shown = new ArrayList<>(allApps.size());
+        for (AppEntry a : allApps) {
+            boolean pinned = false;
+            for (String p : dockPkgs) {
+                if (a.pkg.equals(p)) {
+                    pinned = true;
+                    break;
+                }
+            }
+            if (!pinned) shown.add(a);
+        }
+        adapter.setApps(shown);
+    }
+
     private void bindDock() {
         for (int i = 0; i < DOCK_SLOTS; i++) {
             Holder h = (Holder) slots[i].getTag();
@@ -480,7 +498,7 @@ public final class LauncherActivity extends Activity {
     }
 
     private void pickForSlot(final int idx) {
-        final List<AppEntry> apps = adapter.apps;
+        final List<AppEntry> apps = allApps;
         if (apps.isEmpty()) return;
         String[] names = new String[apps.size()];
         for (int i = 0; i < names.length; i++) names[i] = apps.get(i).label;
@@ -507,6 +525,7 @@ public final class LauncherActivity extends Activity {
             }
         }
         ed.apply();
+        updateGrid();
         bindDock();
     }
 
