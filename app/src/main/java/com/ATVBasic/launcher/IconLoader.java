@@ -12,7 +12,7 @@ import java.util.HashSet;
 import java.util.concurrent.Executor;
 
 /**
- * Renders each app's banner (or icon) into a small RGB_565 bitmap on a background thread and
+ * Renders each app's banner (or icon) into a small ARGB_8888 (transparent) bitmap on a background thread and
  * keeps about three dozen of them in an LRU cache. Everything is dropped when the launcher hides.
  */
 final class IconLoader {
@@ -23,7 +23,6 @@ final class IconLoader {
     private final Runnable onLoaded;
     private final int w;
     private final int h;
-    private final int tileColor;
     private final LruCache<String, Bitmap> cache;
     private final HashSet<String> pending = new HashSet<>(); // UI thread only
     private int generation;                                  // UI thread only
@@ -35,8 +34,7 @@ final class IconLoader {
         this.onLoaded = onLoaded;
         this.w = w;
         this.h = h;
-        this.tileColor = ctx.getColor(R.color.tile);
-        this.cache = new LruCache<String, Bitmap>(Math.max(1, w * h * 2 * 36)) {
+        this.cache = new LruCache<String, Bitmap>(Math.max(1, w * h * 4 * 36)) {
             @Override protected int sizeOf(String key, Bitmap value) {
                 return value.getByteCount();
             }
@@ -68,9 +66,8 @@ final class IconLoader {
     }
 
     private Bitmap render(AppEntry e) {
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565);
+        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(bmp);
-        c.drawColor(tileColor);
         try {
             Drawable d = e.info.loadBanner(pm);
             if (d != null) {
@@ -84,7 +81,7 @@ final class IconLoader {
             }
             d.draw(c);
         } catch (Exception | OutOfMemoryError ignored) {
-            // Leave the plain tile.
+            // Leave it empty.
         }
         return bmp;
     }

@@ -19,6 +19,7 @@ import android.os.Process;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -51,10 +52,14 @@ public final class LauncherActivity extends Activity {
     private static final int DOCK_SLOTS = 6;
     private static final long RELOAD_DELAY_MS = 500;
     private static final long ROTATE_INTERVAL_MS = 30_000;
+    private static final long IDLE_HIDE_MS = 20_000;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final Runnable reload = this::scan;
     private final Runnable rotate = this::rotateWallpaper;
+    private final Runnable hideUi = this::hideUi;
+    private View content;
+    private boolean uiHidden;
     private boolean resumed;
     private boolean rotating;
     private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
@@ -116,6 +121,7 @@ public final class LauncherActivity extends Activity {
                 }, "atv-io"));
         io.allowCoreThreadTimeOut(true);
 
+        content = findViewById(R.id.content);
         wallpaper = findViewById(R.id.wallpaper);
         dateView = findViewById(R.id.date);
         grid = findViewById(R.id.grid);
@@ -162,12 +168,14 @@ public final class LauncherActivity extends Activity {
         if (stamp != shownStamp) loadWallpaper(stamp);
         resumed = true;
         scheduleRotate();
+        showUi();
     }
 
     @Override
     protected void onPause() {
         resumed = false;
         ui.removeCallbacks(rotate);
+        ui.removeCallbacks(hideUi);
         super.onPause();
     }
 
@@ -198,6 +206,7 @@ public final class LauncherActivity extends Activity {
         // Home pressed again: back to the dock.
         lastDock = 0;
         if (drawerOpen) closeDrawer(false);
+        showUi();
         slots[0].requestFocus();
     }
 
@@ -208,7 +217,22 @@ public final class LauncherActivity extends Activity {
     }
 
     @Override
+    public boolean dispatchTouchEvent(MotionEvent e) {
+        if (uiHidden) {
+            if (e.getAction() == MotionEvent.ACTION_DOWN) showUi();
+            return true; // the touch that wakes the UI is not passed on
+        }
+        resetIdle();
+        return super.dispatchTouchEvent(e);
+    }
+
+    @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
+        if (uiHidden) {
+            if (e.getAction() == KeyEvent.ACTION_DOWN) showUi();
+            return true; // the key that wakes the UI is not passed on
+        }
+        resetIdle();
         if (e.getAction() == KeyEvent.ACTION_DOWN) {
             View f = getCurrentFocus();
             int key = e.getKeyCode();
@@ -284,6 +308,32 @@ public final class LauncherActivity extends Activity {
                 if (!isDestroyed() && shownStamp == stamp) wallpaper.setImageBitmap(b);
             });
         });
+    }
+
+    // ------------------------------------------------------------------ idle hiding
+
+    private void resetIdle() {
+        ui.removeCallbacks(hideUi);
+        if (resumed) ui.postDelayed(hideUi, IDLE_HIDE_MS);
+    }
+
+    private void hideUi() {
+        if (!resumed || uiHidden) return;
+        if (dialog != null && dialog.isShowing()) { // a menu is open: not idle
+            resetIdle();
+            return;
+        }
+        if (drawerOpen) closeDrawer(false);
+        uiHidden = true;
+        content.setVisibility(View.INVISIBLE);
+    }
+
+    private void showUi() {
+        boolean wasHidden = uiHidden;
+        uiHidden = false;
+        content.setVisibility(View.VISIBLE);
+        if (wasHidden) slots[lastDock].requestFocus();
+        resetIdle();
     }
 
     private void scheduleRotate() {

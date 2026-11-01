@@ -4,12 +4,18 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Hero tile: the wallpaper / "now" area -->
+    <path
+        android:fillColor="#7DD3FC"
+        android:pathData="M30,27 L78,27 A6,6 0 0 1 84,33 L84,52 A6,6 0 0 1 78,58 L30,58 A6,6 0 0 1 24,52 L24,33 A6,6 0 0 1 30,27 Z" />
+    <!-- Dock: three app tiles -->
     <path
         android:fillColor="#F5F5F4"
-        android:pathData="M44,36 L64,36 A8,8 0 0 1 72,44 L72,64 A8,8 0 0 1 64,72 L44,72 A8,8 0 0 1 36,64 L36,44 A8,8 0 0 1 44,36 Z" />
+        android:pathData="M28,63 L37,63 A4,4 0 0 1 41,67 L41,77 A4,4 0 0 1 37,81 L28,81 A4,4 0 0 1 24,77 L24,67 A4,4 0 0 1 28,63 Z" />
     <path
-        android:fillColor="#00000000"
-        android:pathData="M84,54 A30,30 0 0 1 24,54 A30,30 0 0 1 84,54 Z"
-        android:strokeColor="#7DD3FC"
-        android:strokeWidth="2.5" />
+        android:fillColor="#B8C4D6"
+        android:pathData="M50,63 L59,63 A4,4 0 0 1 63,67 L63,77 A4,4 0 0 1 59,81 L50,81 A4,4 0 0 1 46,77 L46,67 A4,4 0 0 1 50,63 Z" />
+    <path
+        android:fillColor="#B8C4D6"
+        android:pathData="M72,63 L80,63 A4,4 0 0 1 84,67 L84,77 A4,4 0 0 1 80,81 L72,81 A4,4 0 0 1 68,77 L68,67 A4,4 0 0 1 72,63 Z" />
 </vector>
