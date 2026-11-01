@@ -8,11 +8,12 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
 
-/** Floating settings window: wallpaper (file / Picsum) and a shortcut to system settings. */
+/** Floating settings window: wallpaper (file / Picsum / Unsplash), auto-rotate and a shortcut to system settings. */
 public final class SettingsActivity extends Activity {
 
     private static final int REQ_PICK = 1;
@@ -21,7 +22,21 @@ public final class SettingsActivity extends Activity {
         boolean run() throws Exception;
     }
 
+    static final String PREFS = "settings";
+    static final String KEY_AUTO = "auto_source"; // 0 = off, 1 = Picsum, 2 = Unsplash
+
     private boolean busy;
+    private TextView autoRow;
+
+    private android.content.SharedPreferences prefs() {
+        return getSharedPreferences(PREFS, MODE_PRIVATE);
+    }
+
+    private void updateAutoRow() {
+        int v = prefs().getInt(KEY_AUTO, 0);
+        int name = v == 1 ? R.string.auto_picsum : v == 2 ? R.string.auto_unsplash : R.string.auto_off;
+        autoRow.setText(getString(R.string.row_auto, getString(name)));
+    }
 
     @Override
     protected void onCreate(android.os.Bundle savedInstanceState) {
@@ -30,6 +45,17 @@ public final class SettingsActivity extends Activity {
 
         findViewById(R.id.row_file).setOnClickListener(v -> pickFile());
         findViewById(R.id.row_picsum).setOnClickListener(v -> showPicsum());
+        findViewById(R.id.row_unsplash).setOnClickListener(v -> runJob(() -> {
+            File f = UnsplashSource.download(getApplicationContext());
+            return f != null && WallpaperStore.importFile(getApplicationContext(), f);
+        }));
+        autoRow = (TextView) findViewById(R.id.row_auto);
+        updateAutoRow();
+        autoRow.setOnClickListener(v -> {
+            int next = (prefs().getInt(KEY_AUTO, 0) + 1) % 3;
+            prefs().edit().putInt(KEY_AUTO, next).apply();
+            updateAutoRow();
+        });
         findViewById(R.id.row_system).setOnClickListener(v -> {
             try {
                 startActivity(new Intent(Settings.ACTION_SETTINGS));

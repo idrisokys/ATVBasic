@@ -28,6 +28,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,9 +50,13 @@ public final class LauncherActivity extends Activity {
     private static final int COLUMNS = 6;
     private static final int DOCK_SLOTS = 6;
     private static final long RELOAD_DELAY_MS = 500;
+    private static final long ROTATE_INTERVAL_MS = 30_000;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final Runnable reload = this::scan;
+    private final Runnable rotate = this::rotateWallpaper;
+    private boolean resumed;
+    private boolean rotating;
     private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             ui.removeCallbacks(reload); // coalesce bursts of install/remove events
@@ -155,6 +160,15 @@ public final class LauncherActivity extends Activity {
         super.onResume();
         long stamp = WallpaperStore.stamp(this);
         if (stamp != shownStamp) loadWallpaper(stamp);
+        resumed = true;
+        scheduleRotate();
+    }
+
+    @Override
+    protected void onPause() {
+        resumed = false;
+        ui.removeCallbacks(rotate);
+        super.onPause();
     }
 
     @Override
@@ -270,6 +284,40 @@ public final class LauncherActivity extends Activity {
                 if (!isDestroyed() && shownStamp == stamp) wallpaper.setImageBitmap(b);
             });
         });
+    }
+
+    private void scheduleRotate() {
+        ui.removeCallbacks(rotate);
+        int src = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE)
+                .getInt(SettingsActivity.KEY_AUTO, 0);
+        if (src != 0 && resumed && !rotating) ui.postDelayed(rotate, ROTATE_INTERVAL_MS);
+    }
+
+    /** Auto-rotation: downloads a new wallpaper every 30 s while the home screen is visible. */
+    private void rotateWallpaper() {
+        final int src = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE)
+                .getInt(SettingsActivity.KEY_AUTO, 0);
+        if (src == 0 || !resumed || rotating) return;
+        rotating = true;
+        final Context app = getApplicationContext();
+        Thread t = new Thread(() -> {
+            boolean ok = false;
+            try {
+                File f = src == 2 ? UnsplashSource.download(app) : PicsumSource.download(app, 0);
+                ok = f != null && WallpaperStore.importFile(app, f);
+            } catch (Exception | OutOfMemoryError ignored) {
+                // try again next round
+            }
+            final boolean result = ok;
+            ui.post(() -> {
+                rotating = false;
+                if (isDestroyed()) return;
+                if (result && resumed) loadWallpaper(WallpaperStore.stamp(this));
+                scheduleRotate();
+            });
+        }, "atv-rotate");
+        t.setPriority(Thread.MIN_PRIORITY);
+        t.start();
     }
 
     private void updateDate() {

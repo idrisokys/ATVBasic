@@ -16,6 +16,11 @@
     <string name="settings_title">Ayarlar</string>
     <string name="row_wallpaper_file">Dosyadan duvar kağıdı ayarla</string>
     <string name="row_wallpaper_picsum">Picsum duvar kağıdı</string>
+    <string name="row_wallpaper_unsplash">Unsplash duvar kağıdı</string>
+    <string name="row_auto">Otomatik değiştir (30 sn): %1$s</string>
+    <string name="auto_off">Kapalı</string>
+    <string name="auto_picsum">Picsum</string>
+    <string name="auto_unsplash">Unsplash</string>
     <string name="row_system_settings">Sistem ayarları</string>
     <string name="picsum_title">Picsum duvar kağıdı</string>
     <string name="picsum_random">Rastgele</string>

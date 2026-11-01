@@ -25,6 +25,15 @@
         android:text="@string/row_wallpaper_picsum" />
 
     <TextView
+        android:id="@+id/row_unsplash"
+        style="@style/SettingsRow"
+        android:text="@string/row_wallpaper_unsplash" />
+
+    <TextView
+        android:id="@+id/row_auto"
+        style="@style/SettingsRow" />
+
+    <TextView
         android:id="@+id/row_system"
         style="@style/SettingsRow"
         android:text="@string/row_system_settings" />
