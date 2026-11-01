@@ -1,4 +1,4 @@
-package com.bare.launcher;
+package com.ATVBasic.launcher;
 
 import android.content.ComponentName;
 import android.content.Intent;

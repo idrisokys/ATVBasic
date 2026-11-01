@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.bare.launcher"
+    namespace = "com.ATVBasic.launcher"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.bare.launcher"
+        applicationId = "com.ATVBasic.launcher"
         minSdk = 26
         targetSdk = 36
         versionCode = 31
@@ -24,6 +24,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
