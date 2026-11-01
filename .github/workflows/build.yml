@@ -1,4 +1,4 @@
-name: Build APK
+name: Build ATV Basic APK
 
 on:
   push:
@@ -16,6 +16,8 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # The runner already ships the Android SDK; just accept licenses so
+      # Gradle can auto-download any missing platform/build-tools (API 36).
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
@@ -24,9 +26,15 @@ jobs:
           gradle-version: current
 
       - name: Build release APK
-        run: gradle assembleRelease
+        run: gradle assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/*.apk dist/ATV-Basic.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ATVBasic
-          path: app/build/outputs/apk/release/*.apk
+          name: ATV-Basic
+          path: dist/ATV-Basic.apk
+          if-no-files-found: error

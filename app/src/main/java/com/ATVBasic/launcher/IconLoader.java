@@ -12,12 +12,10 @@ import java.util.HashSet;
 import java.util.concurrent.Executor;
 
 /**
- * Renders each app's banner (or icon) into a small RGB_565 bitmap on a background thread,
- * keeps a few MB in an LRU cache, and drops everything when the launcher is hidden.
+ * Renders each app's banner (or icon) into a small RGB_565 bitmap on a background thread and
+ * keeps about three dozen of them in an LRU cache. Everything is dropped when the launcher hides.
  */
 final class IconLoader {
-
-    private static final int CACHE_BYTES = 6 * 1024 * 1024;
 
     private final PackageManager pm;
     private final Executor io;
@@ -26,22 +24,23 @@ final class IconLoader {
     private final int w;
     private final int h;
     private final int tileColor;
-    private final LruCache<String, Bitmap> cache = new LruCache<String, Bitmap>(CACHE_BYTES) {
-        @Override protected int sizeOf(String key, Bitmap value) {
-            return value.getByteCount();
-        }
-    };
+    private final LruCache<String, Bitmap> cache;
     private final HashSet<String> pending = new HashSet<>(); // UI thread only
     private int generation;                                  // UI thread only
 
-    IconLoader(Context ctx, Executor io, Handler ui, Runnable onLoaded) {
+    IconLoader(Context ctx, Executor io, Handler ui, Runnable onLoaded, int w, int h) {
         this.pm = ctx.getPackageManager();
         this.io = io;
         this.ui = ui;
         this.onLoaded = onLoaded;
-        this.w = ctx.getResources().getDimensionPixelSize(R.dimen.icon_width);
-        this.h = ctx.getResources().getDimensionPixelSize(R.dimen.icon_height);
+        this.w = w;
+        this.h = h;
         this.tileColor = ctx.getColor(R.color.tile);
+        this.cache = new LruCache<String, Bitmap>(Math.max(1, w * h * 2 * 36)) {
+            @Override protected int sizeOf(String key, Bitmap value) {
+                return value.getByteCount();
+            }
+        };
     }
 
     Bitmap peek(String pkg) {
