@@ -8,9 +8,9 @@ android {
 
     defaultConfig {
         applicationId = "com.ATVBasic.launcher"
-        minSdk = 26
+        minSdk = 21
         targetSdk = 36
-        versionCode = 31
+        versionCode = 32
         versionName = "3.0.0"
     }
 
