@@ -13,7 +13,6 @@
     <string name="toast_added_dock">Dock\'a eklendi</string>
     <string name="toast_unavailable">Açılamadı</string>
 
-    <string name="settings_title">Ayarlar</string>
     <string name="row_wallpaper_file">Dosyadan duvar kağıdı ayarla</string>
     <string name="row_wallpaper_picsum">Picsum duvar kağıdı</string>
     <string name="row_wallpaper_unsplash">Unsplash duvar kağıdı</string>

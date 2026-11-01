@@ -11,8 +11,6 @@ import android.provider.Settings;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
-
 /** Floating settings window: wallpaper (file / Picsum / Unsplash), auto-rotate and a shortcut to system settings. */
 public final class SettingsActivity extends Activity {
 
@@ -45,10 +43,8 @@ public final class SettingsActivity extends Activity {
 
         findViewById(R.id.row_file).setOnClickListener(v -> pickFile());
         findViewById(R.id.row_picsum).setOnClickListener(v -> showPicsum());
-        findViewById(R.id.row_unsplash).setOnClickListener(v -> runJob(() -> {
-            File f = UnsplashSource.download(getApplicationContext());
-            return f != null && WallpaperStore.importFile(getApplicationContext(), f);
-        }));
+        findViewById(R.id.row_unsplash).setOnClickListener(v ->
+                fetch(WallpaperSource.UNSPLASH, WallpaperSource.PLAIN));
         autoRow = (TextView) findViewById(R.id.row_auto);
         updateAutoRow();
         autoRow.setOnClickListener(v -> {
@@ -97,16 +93,13 @@ public final class SettingsActivity extends Activity {
         };
         new AlertDialog.Builder(this)
                 .setTitle(R.string.picsum_title)
-                .setItems(items, (d, which) -> fetch(which))
+                .setItems(items, (d, which) -> fetch(WallpaperSource.PICSUM, which))
                 .show();
     }
 
-    private void fetch(final int mode) {
+    private void fetch(final int source, final int variant) {
         final Context app = getApplicationContext();
-        runJob(() -> {
-            File f = PicsumSource.download(app, mode);
-            return f != null && WallpaperStore.importFile(app, f);
-        });
+        runJob(() -> WallpaperSource.fetchAndSet(app, source, variant));
     }
 
     /** Runs {@code job} on a background thread, reports the result with a toast, then closes. */
