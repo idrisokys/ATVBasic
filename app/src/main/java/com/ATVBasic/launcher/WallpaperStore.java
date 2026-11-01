@@ -31,10 +31,6 @@ final class WallpaperStore {
         return file(c).lastModified();
     }
 
-    static void clear(Context c) {
-        file(c).delete();
-    }
-
     /** Decodes the saved wallpaper (RGB_565, screen-sized) or returns null. */
     static Bitmap load(Context c) {
         File f = file(c);

@@ -8,19 +8,14 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
-import android.widget.EditText;
 import android.widget.Toast;
 
 import java.io.File;
 
-/** Floating settings window: wallpaper (file / Reddit) and a shortcut to system settings. */
+/** Floating settings window: wallpaper (file / Picsum) and a shortcut to system settings. */
 public final class SettingsActivity extends Activity {
 
     private static final int REQ_PICK = 1;
-    private static final String[] PRESETS = {
-            "r/EarthPorn", "r/wallpaper", "r/wallpapers",
-            "r/Amoledbackgrounds", "r/CityPorn", "r/SpacePorn"
-    };
 
     private interface Job {
         boolean run() throws Exception;
@@ -34,12 +29,7 @@ public final class SettingsActivity extends Activity {
         setContentView(R.layout.activity_settings);
 
         findViewById(R.id.row_file).setOnClickListener(v -> pickFile());
-        findViewById(R.id.row_reddit).setOnClickListener(v -> showReddit());
-        findViewById(R.id.row_clear).setOnClickListener(v -> {
-            WallpaperStore.clear(this);
-            Toast.makeText(this, R.string.toast_wallpaper_removed, Toast.LENGTH_SHORT).show();
-            finish();
-        });
+        findViewById(R.id.row_picsum).setOnClickListener(v -> showPicsum());
         findViewById(R.id.row_system).setOnClickListener(v -> {
             try {
                 startActivity(new Intent(Settings.ACTION_SETTINGS));
@@ -73,41 +63,22 @@ public final class SettingsActivity extends Activity {
         }
     }
 
-    private void showReddit() {
-        String[] items = new String[PRESETS.length + 1];
-        System.arraycopy(PRESETS, 0, items, 0, PRESETS.length);
-        items[PRESETS.length] = getString(R.string.reddit_custom);
+    private void showPicsum() {
+        String[] items = {
+                getString(R.string.picsum_random),
+                getString(R.string.picsum_grayscale),
+                getString(R.string.picsum_blur)
+        };
         new AlertDialog.Builder(this)
-                .setTitle(R.string.reddit_title)
-                .setItems(items, (d, which) -> {
-                    if (which < PRESETS.length) {
-                        fetch(PRESETS[which]);
-                    } else {
-                        showCustom();
-                    }
-                })
+                .setTitle(R.string.picsum_title)
+                .setItems(items, (d, which) -> fetch(which))
                 .show();
     }
 
-    private void showCustom() {
-        final EditText input = new EditText(this);
-        input.setSingleLine();
-        input.setHint(R.string.reddit_hint);
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.reddit_custom_title)
-                .setView(input)
-                .setPositiveButton(android.R.string.ok, (d, w) -> {
-                    String s = input.getText().toString().trim();
-                    if (!s.isEmpty()) fetch(s);
-                })
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
-    }
-
-    private void fetch(final String source) {
+    private void fetch(final int mode) {
         final Context app = getApplicationContext();
         runJob(() -> {
-            File f = RedditSource.download(app, source);
+            File f = PicsumSource.download(app, mode);
             return f != null && WallpaperStore.importFile(app, f);
         });
     }

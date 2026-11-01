@@ -20,14 +20,9 @@
         android:text="@string/row_wallpaper_file" />
 
     <TextView
-        android:id="@+id/row_reddit"
+        android:id="@+id/row_picsum"
         style="@style/SettingsRow"
-        android:text="@string/row_wallpaper_reddit" />
-
-    <TextView
-        android:id="@+id/row_clear"
-        style="@style/SettingsRow"
-        android:text="@string/row_wallpaper_clear" />
+        android:text="@string/row_wallpaper_picsum" />
 
     <TextView
         android:id="@+id/row_system"

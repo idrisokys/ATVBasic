@@ -63,7 +63,7 @@ public final class LauncherActivity extends Activity {
             updateDate();
         }
     };
-    private final SimpleDateFormat dateFormat = new SimpleDateFormat("EEEE, d MMMM", Locale.ENGLISH);
+    private final SimpleDateFormat dateFormat = new SimpleDateFormat("d MMMM EEEE", new Locale("tr", "TR"));
 
     private final View[] slots = new View[DOCK_SLOTS];
     private final String[] dockPkgs = new String[DOCK_SLOTS];
