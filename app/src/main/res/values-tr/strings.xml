@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ATV Basic</string>
+    <string name="settings">Ayarlar</string>
+
+    <string name="add_app">+ Uygulama ekle</string>
+    <string name="menu_add_dock">Dock\'a ekle</string>
+    <string name="menu_change">Uygulamayı değiştir</string>
+    <string name="menu_remove_dock">Dock\'tan kaldır</string>
+    <string name="menu_app_info">Uygulama bilgisi</string>
+    <string name="menu_uninstall">Kaldır</string>
+    <string name="replace_which">Hangi uygulama değiştirilsin?</string>
+    <string name="toast_added_dock">Dock\'a eklendi</string>
+    <string name="toast_unavailable">Açılamadı</string>
+
+    <string name="row_wallpaper_file">Dosyadan duvar kağıdı ayarla</string>
+    <string name="row_wallpaper_picsum">Picsum duvar kağıdı</string>
+    <string name="row_wallpaper_unsplash">Unsplash duvar kağıdı</string>
+    <string name="row_auto">Otomatik değiştir (30 sn): %1$s</string>
+    <string name="auto_off">Kapalı</string>
+    <string name="auto_picsum">Picsum</string>
+    <string name="auto_unsplash">Unsplash</string>
+    <string name="row_system_settings">Sistem ayarları</string>
+    <string name="picsum_title">Picsum duvar kağıdı</string>
+    <string name="picsum_random">Rastgele</string>
+    <string name="picsum_grayscale">Rastgele (siyah-beyaz)</string>
+    <string name="picsum_blur">Rastgele (bulanık)</string>
+    <string name="toast_working">Çalışıyor…</string>
+    <string name="toast_wallpaper_set">Duvar kağıdı ayarlandı</string>
+    <string name="toast_wallpaper_failed">Duvar kağıdı alınamadı</string>
+    <string name="toast_no_picker">Dosya seçici bulunamadı</string>
+</resources>

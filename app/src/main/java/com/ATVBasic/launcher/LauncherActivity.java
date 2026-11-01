@@ -17,6 +17,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Process;
 import android.provider.Settings;
+import android.text.format.DateFormat;
 import android.util.DisplayMetrics;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -73,7 +74,6 @@ public final class LauncherActivity extends Activity {
             updateDate();
         }
     };
-    private final SimpleDateFormat dateFormat = new SimpleDateFormat("d MMMM EEEE", new Locale("tr", "TR"));
 
     private final View[] slots = new View[DOCK_SLOTS];
     private final String[] dockPkgs = new String[DOCK_SLOTS];
@@ -201,6 +201,14 @@ public final class LauncherActivity extends Activity {
         unregisterReceiver(packageReceiver);
         io.shutdownNow();
         super.onDestroy();
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration c) {
+        super.onConfigurationChanged(c); // language switched while running (configChanges)
+        updateDate();
+        bindDock();
+        adapter.notifyDataSetChanged();
     }
 
     @Override
@@ -371,8 +379,12 @@ public final class LauncherActivity extends Activity {
     }
 
     private void updateDate() {
-        dateFormat.setTimeZone(TimeZone.getDefault());
-        dateView.setText(dateFormat.format(new Date()));
+        // Built on every call so a changed device language or time zone is picked up.
+        Locale locale = Locale.getDefault();
+        SimpleDateFormat f = new SimpleDateFormat(
+                DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM"), locale);
+        f.setTimeZone(TimeZone.getDefault());
+        dateView.setText(f.format(new Date()));
     }
 
     // ------------------------------------------------------------------ drawer
