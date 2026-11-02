@@ -42,13 +42,13 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
- * ATV Basic. Home = wallpaper, clock + date, Settings button and a dock of 6 pinned apps.
+ * ATV Basic. Home = wallpaper, clock + date, Settings button and a dock of pinned apps (4-9 per row, 1-4 rows; set in Settings).
  * Press Down on the dock to open the full app grid; Up on its first row (or Back) closes it.
  */
 public final class LauncherActivity extends Activity {
 
     private static final int COLUMNS = 6;
-    private static final int DOCK_SLOTS = 6;
+    private static final int MAX_SLOTS = 36; // 9 per row x 4 rows
     private static final long RELOAD_DELAY_MS = 500;
     private static final long ROTATE_INTERVAL_MS = 60_000;
     private static final long DAILY_CHECK_MS = 60 * 60_000L;
@@ -78,8 +78,11 @@ public final class LauncherActivity extends Activity {
     };
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("d MMMM EEEE", new Locale("tr", "TR"));
 
-    private final View[] slots = new View[DOCK_SLOTS];
-    private final String[] dockPkgs = new String[DOCK_SLOTS];
+    private final View[] slots = new View[MAX_SLOTS];
+    private final String[] dockPkgs = new String[MAX_SLOTS]; // saved pins, also beyond dockCount
+    private int perRow;
+    private int dockRows;
+    private int dockCount;
     private HashMap<String, AppEntry> index = new HashMap<>();
 
     private ThreadPoolExecutor io;
@@ -97,8 +100,10 @@ public final class LauncherActivity extends Activity {
     private boolean drawerOpen;
     private int lastDock;
     private long shownStamp = -1;
-    private int iconW;
-    private int iconH;
+    private int gridIconW;
+    private int gridIconH;
+    private int dockIconW;
+    private int dockIconH;
 
     // ------------------------------------------------------------------ lifecycle
 
@@ -108,14 +113,11 @@ public final class LauncherActivity extends Activity {
         setContentView(R.layout.activity_launcher);
 
         prefs = getSharedPreferences("dock", MODE_PRIVATE);
-        for (int i = 0; i < DOCK_SLOTS; i++) dockPkgs[i] = prefs.getString("slot" + i, null);
+        for (int i = 0; i < MAX_SLOTS; i++) dockPkgs[i] = prefs.getString("slot" + i, null);
 
-        // Six equal columns across the content width, 16:9 tiles inside 8 dp padding.
-        DisplayMetrics dm = getResources().getDisplayMetrics();
-        int screenW = Math.max(dm.widthPixels, dm.heightPixels);
-        int cellW = (screenW - Math.round(80 * dm.density)) / COLUMNS;
-        iconW = cellW - Math.round(16 * dm.density);
-        iconH = iconW * 9 / 16;
+        // Grid: six equal columns; 16:9 tiles inside 8 dp padding. (The dock size is set below.)
+        gridIconW = iconWidth(COLUMNS);
+        gridIconH = gridIconW * 9 / 16;
 
         // One short-lived, low-priority worker thread (exits after 5 s idle).
         io = new ThreadPoolExecutor(1, 1, 5, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
@@ -131,9 +133,7 @@ public final class LauncherActivity extends Activity {
         grid = findViewById(R.id.grid);
         dock = findViewById(R.id.dock);
         adapter = new AppAdapter();
-        icons = new IconLoader(this, io, ui, this::refreshIcons, iconW, iconH);
-
-        buildDock();
+        applyDockLayout();
 
         grid.setOnItemClickListener((p, v, pos, id) -> open(adapter.getItem(pos).launchIntent()));
         grid.setOnItemLongClickListener((p, v, pos, id) -> {
@@ -189,6 +189,11 @@ public final class LauncherActivity extends Activity {
         long stamp = WallpaperStore.stamp(this);
         if (stamp != shownStamp) loadWallpaper(stamp);
         resumed = true;
+        if (applyDockLayout()) { // dock size changed in Settings
+            updateGrid();
+            bindDock();
+            slots[lastDock].requestFocus();
+        }
         SharedPreferences sp = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE);
         autoSource = sp.getInt(SettingsActivity.KEY_AUTO, SettingsActivity.DEFAULT_SOURCE); // 0 = off; first launch = Wallhaven
         autoMode = sp.getInt(SettingsActivity.KEY_MODE, SettingsActivity.DEFAULT_MODE);
@@ -211,7 +216,7 @@ public final class LauncherActivity extends Activity {
         dismissDialog();
         if (drawerOpen) closeDrawer(false);
         icons.clear();
-        for (View s : slots) ((Holder) s.getTag()).release();
+        for (int i = 0; i < dockCount; i++) ((Holder) slots[i].getTag()).release();
         wallpaper.setImageDrawable(null);
         shownStamp = -1;
         super.onStop();
@@ -261,7 +266,8 @@ public final class LauncherActivity extends Activity {
         if (e.getAction() == KeyEvent.ACTION_DOWN) {
             View f = getCurrentFocus();
             int key = e.getKeyCode();
-            if (key == KeyEvent.KEYCODE_DPAD_DOWN && !drawerOpen && slotIndex(f) >= 0) {
+            if (key == KeyEvent.KEYCODE_DPAD_DOWN && !drawerOpen
+                    && slotIndex(f) >= dockCount - perRow && slotIndex(f) >= 0) { // last dock row
                 openDrawer();
                 return true;
             }
@@ -452,30 +458,69 @@ public final class LauncherActivity extends Activity {
 
     // ------------------------------------------------------------------ dock
 
-    private void buildDock() {
-        for (int i = 0; i < DOCK_SLOTS; i++) {
-            final int idx = i;
-            View v = getLayoutInflater().inflate(R.layout.item_app, dock, false);
-            v.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            v.setTag(new Holder(v, iconW, iconH));
-            v.setFocusable(true);
-            v.setClickable(true);
-            v.setBackgroundResource(R.drawable.slot_bg);
-            v.setOnClickListener(x -> onSlotClick(idx));
-            v.setOnLongClickListener(x -> {
-                showSlotMenu(idx);
-                return true;
-            });
-            v.setOnFocusChangeListener((x, has) -> {
-                if (has) lastDock = idx;
-            });
-            dock.addView(v);
-            slots[i] = v;
+    /** Width of one app tile when {@code columns} of them share the screen. */
+    private int iconWidth(int columns) {
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        int screenW = Math.max(dm.widthPixels, dm.heightPixels);
+        return (screenW - Math.round(80 * dm.density)) / columns - Math.round(16 * dm.density);
+    }
+
+    /**
+     * Reads "apps per row" and "rows" from Settings and (re)builds the dock when they changed.
+     * Returns true when the dock was rebuilt.
+     */
+    private boolean applyDockLayout() {
+        SharedPreferences sp = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE);
+        int pr = Math.max(4, Math.min(9, sp.getInt(SettingsActivity.KEY_PER_ROW,
+                SettingsActivity.DEFAULT_PER_ROW)));
+        int rw = Math.max(1, Math.min(4, sp.getInt(SettingsActivity.KEY_ROWS,
+                SettingsActivity.DEFAULT_ROWS)));
+        if (pr == perRow && rw == dockRows) return false;
+        perRow = pr;
+        dockRows = rw;
+        dockCount = pr * rw;
+        dockIconW = iconWidth(pr);
+        dockIconH = dockIconW * 9 / 16;
+        lastDock = Math.min(lastDock, dockCount - 1);
+
+        // Banners are rendered once at the larger of the two tile sizes and scaled down by the views.
+        int bw = Math.max(gridIconW, dockIconW);
+        if (icons != null) icons.clear();
+        icons = new IconLoader(this, io, ui, this::refreshIcons, bw, bw * 9 / 16);
+
+        dock.removeAllViews();
+        java.util.Arrays.fill(slots, null);
+        for (int r = 0; r < rw; r++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            dock.addView(row, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            for (int c = 0; c < pr; c++) {
+                final int idx = r * pr + c;
+                View v = getLayoutInflater().inflate(R.layout.item_app, row, false);
+                v.setLayoutParams(new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                v.setTag(new Holder(v, dockIconW, dockIconH));
+                v.setFocusable(true);
+                v.setClickable(true);
+                v.setBackgroundResource(R.drawable.slot_bg);
+                v.setOnClickListener(x -> onSlotClick(idx));
+                v.setOnLongClickListener(x -> {
+                    showSlotMenu(idx);
+                    return true;
+                });
+                v.setOnFocusChangeListener((x, has) -> {
+                    if (has) lastDock = idx;
+                });
+                row.addView(v);
+                slots[idx] = v;
+            }
         }
+        return true;
     }
 
     private int slotIndex(View v) {
-        for (int i = 0; i < DOCK_SLOTS; i++) if (slots[i] == v) return i;
+        for (int i = 0; i < dockCount; i++) if (slots[i] == v) return i;
         return -1;
     }
 
@@ -488,8 +533,8 @@ public final class LauncherActivity extends Activity {
         ArrayList<AppEntry> shown = new ArrayList<>(allApps.size());
         for (AppEntry a : allApps) {
             boolean pinned = false;
-            for (String p : dockPkgs) {
-                if (a.pkg.equals(p)) {
+            for (int i = 0; i < dockCount; i++) {
+                if (a.pkg.equals(dockPkgs[i])) {
                     pinned = true;
                     break;
                 }
@@ -500,7 +545,7 @@ public final class LauncherActivity extends Activity {
     }
 
     private void bindDock() {
-        for (int i = 0; i < DOCK_SLOTS; i++) {
+        for (int i = 0; i < dockCount; i++) {
             Holder h = (Holder) slots[i].getTag();
             AppEntry e = slotEntry(i);
             if (e == null) {
@@ -521,8 +566,8 @@ public final class LauncherActivity extends Activity {
     /** An icon finished loading: update the visible grid cells and the dock. */
     private void refreshIcons() {
         adapter.refreshVisible();
-        for (View s : slots) {
-            Holder h = (Holder) s.getTag();
+        for (int i = 0; i < dockCount; i++) {
+            Holder h = (Holder) slots[i].getTag();
             if (h.pkg != null) h.bind(icons.peek(h.pkg));
         }
     }
@@ -567,13 +612,13 @@ public final class LauncherActivity extends Activity {
 
     private void setSlot(int idx, String pkg) {
         if (pkg != null) {
-            for (int i = 0; i < DOCK_SLOTS; i++) {
+            for (int i = 0; i < MAX_SLOTS; i++) {
                 if (pkg.equals(dockPkgs[i])) dockPkgs[i] = null; // an app lives in one slot only
             }
         }
         dockPkgs[idx] = pkg;
         SharedPreferences.Editor ed = prefs.edit();
-        for (int i = 0; i < DOCK_SLOTS; i++) {
+        for (int i = 0; i < MAX_SLOTS; i++) {
             if (dockPkgs[i] == null) {
                 ed.remove("slot" + i);
             } else {
@@ -586,10 +631,10 @@ public final class LauncherActivity extends Activity {
     }
 
     private void addToDock(final AppEntry e) {
-        for (int i = 0; i < DOCK_SLOTS; i++) {
+        for (int i = 0; i < dockCount; i++) {
             if (e.pkg.equals(dockPkgs[i])) return; // already there
         }
-        for (int i = 0; i < DOCK_SLOTS; i++) {
+        for (int i = 0; i < dockCount; i++) {
             if (slotEntry(i) == null) {
                 setSlot(i, e.pkg);
                 Toast.makeText(this, R.string.toast_added_dock, Toast.LENGTH_SHORT).show();
@@ -597,8 +642,8 @@ public final class LauncherActivity extends Activity {
             }
         }
         // Dock is full: ask which app to replace.
-        String[] names = new String[DOCK_SLOTS];
-        for (int i = 0; i < DOCK_SLOTS; i++) names[i] = slotEntry(i).label;
+        String[] names = new String[dockCount];
+        for (int i = 0; i < dockCount; i++) names[i] = slotEntry(i).label;
         dismissDialog();
         dialog = new AlertDialog.Builder(this, R.style.Theme_ATVBasic_Dialog)
                 .setTitle(R.string.replace_which)
@@ -712,7 +757,7 @@ public final class LauncherActivity extends Activity {
             View v = convertView;
             if (v == null) {
                 v = getLayoutInflater().inflate(R.layout.item_app, parent, false);
-                h = new Holder(v, iconW, iconH);
+                h = new Holder(v, gridIconW, gridIconH);
                 v.setTag(h);
             } else {
                 h = (Holder) v.getTag();

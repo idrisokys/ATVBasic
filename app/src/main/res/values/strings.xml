@@ -19,6 +19,10 @@
     <string name="default_home_message">ATV Basic ana ekran olarak ayarlansın mı?</string>
     <string name="default_home_yes">Evet</string>
     <string name="default_home_no">Şimdi değil</string>
+    <string name="row_per_row">Satırdaki uygulama sayısı: %1$d</string>
+    <string name="row_rows">Sık kullanılan satır sayısı: %1$d</string>
+    <string name="title_per_row">Satırdaki uygulama sayısı</string>
+    <string name="title_rows">Sık kullanılan satır sayısı</string>
     <string name="row_system_settings">Sistem ayarları</string>
     <string name="src_wikimedia">Wikimedia</string>
     <string name="src_wallhaven">Wallhaven</string>
