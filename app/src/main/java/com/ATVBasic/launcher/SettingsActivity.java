@@ -19,13 +19,6 @@ public final class SettingsActivity extends Activity {
     static final String KEY_AUTO = "auto_source"; // 0 = off, else a WallpaperSource id
     static final String KEY_MODE = "auto_mode";   // WallpaperSource.RANDOM / POPULAR
 
-    static final String KEY_PER_ROW = "dock_per_row"; // favourites per row: 4..9
-    static final String KEY_ROWS = "dock_rows";       // favourite rows: 1..4
-    static final int DEFAULT_PER_ROW = 6;
-    static final int DEFAULT_ROWS = 1;
-    private static final int[] PER_ROW_VALUES = {4, 5, 6, 7, 8, 9};
-    private static final int[] ROW_VALUES = {1, 2, 3, 4};
-
     /** First launch (nothing saved yet): Wallhaven nature, most-liked first. */
     static final int DEFAULT_SOURCE = WallpaperSource.WALLHAVEN;
     static final int DEFAULT_MODE = WallpaperSource.POPULAR;
@@ -70,11 +63,6 @@ public final class SettingsActivity extends Activity {
             }
         });
 
-        setupNumberRow(R.id.row_per_row, R.string.row_per_row, R.string.title_per_row,
-                KEY_PER_ROW, DEFAULT_PER_ROW, PER_ROW_VALUES);
-        setupNumberRow(R.id.row_rows, R.string.row_rows, R.string.title_rows,
-                KEY_ROWS, DEFAULT_ROWS, ROW_VALUES);
-
         View home = findViewById(R.id.row_default_home);
         if (HomeRole.isDefault(this)) {
             home.setVisibility(View.GONE);
@@ -94,31 +82,6 @@ public final class SettingsActivity extends Activity {
         updateDots();
 
         findViewById(R.id.row_system).requestFocus();
-    }
-
-    /** A row showing "label: value"; selecting it opens a list of the allowed values. */
-    private void setupNumberRow(int rowId, final int labelRes, final int titleRes,
-                                final String key, final int def, final int[] values) {
-        final TextView row = (TextView) findViewById(rowId);
-        final android.content.SharedPreferences sp = getSharedPreferences(PREFS, MODE_PRIVATE);
-        row.setText(getString(labelRes, sp.getInt(key, def)));
-        row.setOnClickListener(v -> {
-            int current = sp.getInt(key, def);
-            String[] items = new String[values.length];
-            int checked = -1;
-            for (int i = 0; i < values.length; i++) {
-                items[i] = String.valueOf(values[i]);
-                if (values[i] == current) checked = i;
-            }
-            new android.app.AlertDialog.Builder(this, R.style.Theme_ATVBasic_Dialog)
-                    .setTitle(titleRes)
-                    .setSingleChoiceItems(items, checked, (d, which) -> {
-                        sp.edit().putInt(key, values[which]).apply();
-                        row.setText(getString(labelRes, values[which]));
-                        d.dismiss();
-                    })
-                    .show();
-        });
     }
 
     /** Stops the automatic picture change; the current wallpaper stays. */
