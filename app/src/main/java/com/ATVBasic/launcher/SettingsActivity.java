@@ -11,9 +11,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * Floating settings window: system settings plus a wallpaper source menu. Choosing a source
- * starts a 30 s rotation: Wallhaven and Pixabay show their most-liked pictures,
- * Bing and Picsum show random ones.
+ * Floating settings window: system settings plus a wallpaper source menu (Wallhaven, Bing,
+ * Wikimedia Commons, NASA, Picsum). Choosing a source starts a 30 s rotation: Wallhaven shows its
+ * most-liked pictures, the others random ones.
  */
 public final class SettingsActivity extends Activity {
 
@@ -27,8 +27,8 @@ public final class SettingsActivity extends Activity {
 
     /** Menu order. */
     private static final int[] SOURCES = {
-            WallpaperSource.WALLHAVEN, WallpaperSource.PIXABAY,
-            WallpaperSource.BING, WallpaperSource.PICSUM
+            WallpaperSource.WALLHAVEN, WallpaperSource.BING,
+            WallpaperSource.WIKIMEDIA, WallpaperSource.NASA, WallpaperSource.PICSUM
     };
 
     private boolean busy;
@@ -36,21 +36,22 @@ public final class SettingsActivity extends Activity {
     private static int sourceName(int source) {
         switch (source) {
             case WallpaperSource.WALLHAVEN: return R.string.src_wallhaven;
-            case WallpaperSource.PIXABAY: return R.string.src_pixabay;
             case WallpaperSource.BING: return R.string.src_bing;
-            default: return R.string.src_picsum;
+            case WallpaperSource.WIKIMEDIA: return R.string.src_wikimedia;
+            case WallpaperSource.NASA: return R.string.src_nasa;
+            case WallpaperSource.PICSUM: return R.string.src_picsum;
+            default: return R.string.source_none;
         }
     }
 
-    /** Most-liked pictures for the three photo sites, random for Bing and Picsum. */
+    /** Most-liked pictures for Wallhaven, random ones for the others. */
     private static int modeFor(int source) {
-        return source == WallpaperSource.WALLHAVEN
-                || source == WallpaperSource.PIXABAY ? WallpaperSource.POPULAR : WallpaperSource.RANDOM;
+        return source == WallpaperSource.WALLHAVEN ? WallpaperSource.POPULAR : WallpaperSource.RANDOM;
     }
 
     private void updateSourceRow(TextView row) {
         int src = getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_AUTO, 0);
-        String name = src == 0 ? getString(R.string.source_none) : getString(sourceName(src));
+        String name = getString(sourceName(src));
         row.setText(getString(R.string.row_source, name));
     }
 
@@ -85,10 +86,6 @@ public final class SettingsActivity extends Activity {
 
     /** Fetches one picture now and, on success, turns on 30 s rotation for this source. */
     private void choose(final int source) {
-        if (WallpaperSource.missingKey(this, source)) {
-            Toast.makeText(this, R.string.toast_key_missing, Toast.LENGTH_LONG).show();
-            return;
-        }
         final int mode = modeFor(source);
         final Context app = getApplicationContext();
         runJob(() -> {

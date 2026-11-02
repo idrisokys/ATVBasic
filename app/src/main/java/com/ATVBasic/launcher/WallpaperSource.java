@@ -1,6 +1,7 @@
 package com.ATVBasic.launcher;
 
 import android.content.Context;
+import android.graphics.BitmapFactory;
 import android.util.DisplayMetrics;
 
 import org.json.JSONArray;
@@ -12,42 +13,39 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
 /**
- * Online wallpaper sources: Wallhaven, Pixabay, Bing (and Picsum).
+ * Online wallpaper sources for a TV. None of them needs an API key.
  *
- *  - Wallhaven: most-favorited (sorting=favorites) or random, no key needed.
- *  - Pixabay:   order=popular or latest, API key from BuildConfig.PIXABAY_KEY.
- *  - Bing:      last 8 daily photos / today's featured photo.
+ *  - Wallhaven:  16:9, at least Full HD, most-favorited first (sorting=favorites).
+ *  - Bing:       the last 8 daily photos in UHD.
+ *  - Wikimedia:  Commons "Featured pictures" (community-voted), filtered to wide, big images.
+ *  - NASA:       Astronomy Picture of the Day (random, public DEMO_KEY), images only.
+ *  - Picsum:     a random photo at the exact screen size.
  *
- * Listings are cached in small in-memory pools (20 min) so a 30 s rotation never repeats a
- * picture and stays far below the APIs' rate limits.
+ * Listings are cached in small in-memory pools (60 min) so a 30 s rotation never repeats a
+ * picture and stays far below the services' rate limits.
  */
 final class WallpaperSource {
 
-    /** Values double as the "auto_source" preference (0 = off / static). */
+    /** Values double as the "auto_source" preference (0 = off). Ids 2 and 4 are retired. */
     static final int PICSUM = 1;
     static final int WALLHAVEN = 3;
-    static final int PIXABAY = 4;
     static final int BING = 5;
+    static final int WIKIMEDIA = 6;
+    static final int NASA = 7;
 
-    /** Modes for every source except Picsum. */
     static final int RANDOM = 0;
     static final int POPULAR = 1;
 
-    /** Picsum variants (share the "mode" slot). */
-    static final int PLAIN = 0;
-    static final int GRAYSCALE = 1;
-    static final int BLUR = 2;
-
-    private static final long POOL_TTL_MS = 20 * 60_000L;
+    private static final long POOL_TTL_MS = 60 * 60_000L;
     private static final long MAX_JSON_BYTES = 2L * 1024 * 1024;
     private static final Random RND = new Random();
 
@@ -69,39 +67,28 @@ final class WallpaperSource {
 
     private WallpaperSource() {}
 
-    // ------------------------------------------------------------------ API keys
-
-    /** Baked in at build time (PIXABAY_KEY); may be empty. */
-    static String apiKey(Context c, int source) {
-        return BuildConfig.PIXABAY_KEY;
-    }
-
-    /** Pixabay cannot be used without a key. */
-    static boolean missingKey(Context c, int source) {
-        return source == PIXABAY && apiKey(c, source).isEmpty();
-    }
-
     // ------------------------------------------------------------------ public entry
 
     /** Blocking. Downloads a picture from {@code source} and installs it as the wallpaper. */
     static boolean fetchAndSet(Context ctx, int source, int mode) {
-        return fetchOne(ctx, source, mode);
-    }
-
-    private static boolean fetchOne(Context ctx, int source, int mode) {
         File out = new File(ctx.getCacheDir(), "wp_download");
         try {
             DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
             int w = Math.min(Math.max(dm.widthPixels, dm.heightPixels), 3840);
-            int h = Math.min(Math.min(dm.widthPixels, dm.heightPixels), 2160);
-            for (int attempt = 0; attempt < 3; attempt++) {
-                String url = nextUrl(ctx, source, mode, w, h);
+            int attempts = source == NASA ? 6 : 3; // APOD pictures are often unsuitable
+            for (int attempt = 0; attempt < attempts; attempt++) {
+                String url = nextUrl(source, mode, w);
                 if (url == null) break;
-                boolean ok = fetchFile(url, out);
-                if (!ok && url.endsWith("_UHD.jpg")) { // Bing: fall back to Full HD
-                    ok = fetchFile(url.replace("_UHD.jpg", "_1920x1080.jpg"), out);
+                try {
+                    boolean ok = fetchFile(url, out);
+                    if (!ok && url.endsWith("_UHD.jpg")) { // Bing: fall back to Full HD
+                        ok = fetchFile(url.replace("_UHD.jpg", "_1920x1080.jpg"), out);
+                    }
+                    if (ok && source == NASA && !suitable(out)) ok = false;
+                    if (ok) return WallpaperStore.importFile(ctx, out);
+                } catch (IOException ignored) {
+                    // this picture failed (too large, network): try the next one
                 }
-                if (ok) return WallpaperStore.importFile(ctx, out);
             }
         } catch (Exception | OutOfMemoryError ignored) {
             // reported by the caller as a failure
@@ -110,26 +97,37 @@ final class WallpaperSource {
         return false;
     }
 
+    /** Wide enough and big enough that a centre-crop to 16:9 keeps the picture. */
+    private static boolean suitable(File f) {
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(f.getPath(), o);
+        if (o.outWidth < 1280 || o.outHeight < 720) return false;
+        double ratio = o.outWidth / (double) o.outHeight;
+        return ratio >= 1.4 && ratio <= 2.2;
+    }
+
     // ------------------------------------------------------------------ URL selection
 
-    private static String nextUrl(final Context ctx, final int source, final int mode,
-                                  final int w, final int h) throws Exception {
+    private static String nextUrl(final int source, final int mode, final int w) throws Exception {
         switch (source) {
             case WALLHAVEN:
                 return pop(source + ":" + mode, () -> wallhaven(mode));
-            case PIXABAY:
-                return pop(source + ":" + mode, () -> pixabay(apiKey(ctx, PIXABAY), mode));
             case BING:
-                return pop(source + ":" + mode, () -> bing(mode));
-            default: {
-                String suffix = mode == GRAYSCALE ? "&grayscale" : mode == BLUR ? "&blur=2" : "";
-                return "https://picsum.photos/" + w + "/" + h
-                        + "?random=" + System.nanoTime() + suffix;
-            }
+                return pop(source + ":" + mode, () -> bing());
+            case WIKIMEDIA:
+                return pop(source + ":" + mode, () -> wikimedia(w));
+            case NASA:
+                return pop(source + ":" + mode, () -> nasa());
+            case PICSUM:
+                return "https://picsum.photos/" + w + "/" + Math.round(w * 9f / 16f)
+                        + "?random=" + System.nanoTime();
+            default:
+                return null;
         }
     }
 
-    /** Takes one URL from the cached pool, (re)loading it when empty or older than 20 min. */
+    /** Takes one URL from the cached pool, (re)loading it when empty or older than 60 min. */
     private static synchronized String pop(String key, Loader loader) throws Exception {
         Pool p = POOLS.get(key);
         if (p == null || p.urls.isEmpty()
@@ -146,7 +144,7 @@ final class WallpaperSource {
         q += mode == POPULAR
                 ? "&sorting=favorites&order=desc&page=" + (1 + RND.nextInt(5))
                 : "&sorting=random";
-        JSONArray data = new JSONObject(getText(q, null)).getJSONArray("data");
+        JSONArray data = new JSONObject(getText(q)).getJSONArray("data");
         List<String> list = new ArrayList<>();
         for (int i = 0; i < data.length(); i++) {
             String path = data.getJSONObject(i).optString("path");
@@ -155,37 +153,66 @@ final class WallpaperSource {
         return list;
     }
 
-    private static List<String> pixabay(String key, int mode) throws Exception {
-        String base = "https://pixabay.com/api/?key=" + URLEncoder.encode(key, "UTF-8")
-                + "&image_type=photo&orientation=horizontal&min_width=1920&min_height=1080"
-                + "&safesearch=true&per_page=50&order=" + (mode == POPULAR ? "popular" : "latest");
-        int maxPage = mode == POPULAR ? 3 : 8;
-        String body;
-        try {
-            body = getText(base + "&page=" + (1 + RND.nextInt(maxPage)), null);
-        } catch (IOException e) { // page out of range: first page always exists
-            body = getText(base + "&page=1", null);
-        }
-        JSONArray hits = new JSONObject(body).getJSONArray("hits");
+    private static List<String> bing() throws Exception {
+        JSONArray a = new JSONObject(getText(
+                "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=tr-TR"))
+                .getJSONArray("images");
         List<String> list = new ArrayList<>();
-        for (int i = 0; i < hits.length(); i++) {
-            JSONObject o = hits.getJSONObject(i);
-            String u = o.optString("fullHDURL"); // only present for approved API accounts
-            if (u.isEmpty()) u = o.optString("largeImageURL");
-            if (!u.isEmpty()) list.add(u);
+        for (int i = 0; i < a.length(); i++) {
+            String base = a.getJSONObject(i).optString("urlbase");
+            if (!base.isEmpty()) list.add("https://www.bing.com" + base + "_UHD.jpg");
         }
         return list;
     }
 
-    private static List<String> bing(int mode) throws Exception {
-        JSONArray a = new JSONObject(getText(
-                "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=tr-TR", null))
-                .getJSONArray("images");
-        int n = mode == POPULAR ? Math.min(1, a.length()) : a.length(); // today's featured photo
+    /** Commons "Featured pictures", starting at a random place in the category. */
+    private static List<String> wikimedia(int width) throws Exception {
+        String base = "https://commons.wikimedia.org/w/api.php?action=query&format=json"
+                + "&generator=categorymembers&gcmtitle=Category:Featured_pictures_on_Wikimedia_Commons"
+                + "&gcmtype=file&gcmlimit=50&gcmsort=sortkey"
+                + "&prop=imageinfo&iiprop=url%7Csize%7Cmime&iiurlwidth=" + width;
         List<String> list = new ArrayList<>();
-        for (int i = 0; i < n; i++) {
-            String base = a.getJSONObject(i).optString("urlbase");
-            if (!base.isEmpty()) list.add("https://www.bing.com" + base + "_UHD.jpg");
+        for (int attempt = 0; attempt < 3 && list.isEmpty(); attempt++) {
+            String start = "";
+            if (attempt < 2) { // three random capital letters as the start sort key
+                start = "&gcmstarthexsortkey=" + String.format("%02x%02x%02x",
+                        0x41 + RND.nextInt(26), 0x41 + RND.nextInt(26), 0x41 + RND.nextInt(26));
+            }
+            JSONObject query = new JSONObject(getText(base + start)).optJSONObject("query");
+            JSONObject pages = query == null ? null : query.optJSONObject("pages");
+            if (pages == null) continue;
+            Iterator<String> ids = pages.keys();
+            while (ids.hasNext()) {
+                JSONArray info = pages.getJSONObject(ids.next()).optJSONArray("imageinfo");
+                if (info == null || info.length() == 0) continue;
+                JSONObject ii = info.getJSONObject(0);
+                String mime = ii.optString("mime");
+                if (!mime.equals("image/jpeg") && !mime.equals("image/png")) continue;
+                int iw = ii.optInt("width");
+                int ih = ii.optInt("height");
+                if (iw < 1920 || ih < 1080) continue;
+                double ratio = iw / (double) ih;
+                if (ratio < 1.45 || ratio > 2.1) continue;
+                String url = ii.optString("thumburl"); // scaled to the screen width: small download
+                if (url.isEmpty()) url = ii.optString("url");
+                if (!url.isEmpty()) list.add(url);
+            }
+        }
+        return list;
+    }
+
+    /** 100 random Astronomy Pictures of the Day (about one request per hour while in use). */
+    private static List<String> nasa() throws Exception {
+        JSONArray a = new JSONArray(getText(
+                "https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&count=100"));
+        List<String> list = new ArrayList<>();
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject o = a.getJSONObject(i);
+            if (!"image".equals(o.optString("media_type"))) continue; // skip videos
+            String u = o.optString("hdurl");
+            if (u.isEmpty()) u = o.optString("url");
+            if (u.isEmpty()) continue;
+            list.add(u.startsWith("http://") ? "https://" + u.substring(7) : u);
         }
         return list;
     }
@@ -196,13 +223,13 @@ final class WallpaperSource {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(10_000);
         c.setReadTimeout(20_000);
-        c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android TV) ATVBasic");
+        c.setRequestProperty("User-Agent",
+                "Mozilla/5.0 (Linux; Android TV) ATVBasic/3.1 (wallpaper launcher)");
         return c;
     }
 
-    private static String getText(String url, String authorization) throws IOException {
+    private static String getText(String url) throws IOException {
         HttpURLConnection c = open(url);
-        if (authorization != null) c.setRequestProperty("Authorization", authorization);
         try {
             if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
             try (InputStream in = c.getInputStream()) {

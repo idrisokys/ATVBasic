@@ -14,15 +14,15 @@
     <string name="toast_unavailable">Açılamadı</string>
 
     <string name="row_system_settings">Sistem ayarları</string>
-    <string name="src_picsum">Picsum</string>
+    <string name="src_wikimedia">Wikimedia Commons</string>
+    <string name="src_nasa">NASA (günün astronomi resmi)</string>
     <string name="src_wallhaven">Wallhaven</string>
-    <string name="src_pixabay">Pixabay</string>
     <string name="src_bing">Bing</string>
+    <string name="src_picsum">Picsum</string>
     <string name="toast_auto_on">Her 30 saniyede bir değişecek</string>
     <string name="toast_working">Çalışıyor…</string>
     <string name="toast_wallpaper_failed">Duvar kağıdı alınamadı</string>
     <string name="row_source">Duvar kağıdı kaynağı: %1$s</string>
     <string name="source_none">Seçilmedi</string>
     <string name="source_dialog_title">Duvar kağıdı kaynağı</string>
-    <string name="toast_key_missing">Pixabay için API anahtarı gerekli (derlemeye PIXABAY_KEY ekle)</string>
 </resources>
