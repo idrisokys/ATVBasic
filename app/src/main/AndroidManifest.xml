@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Online wallpaper download (Wallhaven, Bing, Wikimedia Commons, NASA, Picsum). -->
+    <!-- Online wallpaper download (Wallhaven, Wikimedia, Picsum, Bing). -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Needed to open the system uninstall dialog (Android 9+). -->

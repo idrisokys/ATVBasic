@@ -14,8 +14,7 @@
     <string name="toast_unavailable">Açılamadı</string>
 
     <string name="row_system_settings">Sistem ayarları</string>
-    <string name="src_wikimedia">Wikimedia Commons</string>
-    <string name="src_nasa">NASA (günün astronomi resmi)</string>
+    <string name="src_wikimedia">Wikimedia</string>
     <string name="src_wallhaven">Wallhaven</string>
     <string name="src_bing">Bing</string>
     <string name="src_picsum">Picsum</string>

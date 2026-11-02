@@ -1,7 +1,6 @@
 package com.ATVBasic.launcher;
 
 import android.content.Context;
-import android.graphics.BitmapFactory;
 import android.util.DisplayMetrics;
 
 import org.json.JSONArray;
@@ -27,7 +26,6 @@ import java.util.Random;
  *  - Wallhaven:  16:9, at least Full HD, most-favorited first (sorting=favorites).
  *  - Bing:       the last 8 daily photos in UHD.
  *  - Wikimedia:  Commons "Featured pictures" (community-voted), filtered to wide, big images.
- *  - NASA:       Astronomy Picture of the Day (random, public DEMO_KEY), images only.
  *  - Picsum:     a random photo at the exact screen size.
  *
  * Listings are cached in small in-memory pools (60 min) so a 30 s rotation never repeats a
@@ -35,12 +33,11 @@ import java.util.Random;
  */
 final class WallpaperSource {
 
-    /** Values double as the "auto_source" preference (0 = off). Ids 2 and 4 are retired. */
+    /** Values double as the "auto_source" preference (0 = off). Ids 2, 4 and 7 are retired. */
     static final int PICSUM = 1;
     static final int WALLHAVEN = 3;
     static final int BING = 5;
     static final int WIKIMEDIA = 6;
-    static final int NASA = 7;
 
     static final int RANDOM = 0;
     static final int POPULAR = 1;
@@ -75,8 +72,7 @@ final class WallpaperSource {
         try {
             DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
             int w = Math.min(Math.max(dm.widthPixels, dm.heightPixels), 3840);
-            int attempts = source == NASA ? 6 : 3; // APOD pictures are often unsuitable
-            for (int attempt = 0; attempt < attempts; attempt++) {
+            for (int attempt = 0; attempt < 3; attempt++) {
                 String url = nextUrl(source, mode, w);
                 if (url == null) break;
                 try {
@@ -84,7 +80,6 @@ final class WallpaperSource {
                     if (!ok && url.endsWith("_UHD.jpg")) { // Bing: fall back to Full HD
                         ok = fetchFile(url.replace("_UHD.jpg", "_1920x1080.jpg"), out);
                     }
-                    if (ok && source == NASA && !suitable(out)) ok = false;
                     if (ok) return WallpaperStore.importFile(ctx, out);
                 } catch (IOException ignored) {
                     // this picture failed (too large, network): try the next one
@@ -97,16 +92,6 @@ final class WallpaperSource {
         return false;
     }
 
-    /** Wide enough and big enough that a centre-crop to 16:9 keeps the picture. */
-    private static boolean suitable(File f) {
-        BitmapFactory.Options o = new BitmapFactory.Options();
-        o.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(f.getPath(), o);
-        if (o.outWidth < 1280 || o.outHeight < 720) return false;
-        double ratio = o.outWidth / (double) o.outHeight;
-        return ratio >= 1.4 && ratio <= 2.2;
-    }
-
     // ------------------------------------------------------------------ URL selection
 
     private static String nextUrl(final int source, final int mode, final int w) throws Exception {
@@ -117,8 +102,6 @@ final class WallpaperSource {
                 return pop(source + ":" + mode, () -> bing());
             case WIKIMEDIA:
                 return pop(source + ":" + mode, () -> wikimedia(w));
-            case NASA:
-                return pop(source + ":" + mode, () -> nasa());
             case PICSUM:
                 return "https://picsum.photos/" + w + "/" + Math.round(w * 9f / 16f)
                         + "?random=" + System.nanoTime();
@@ -197,22 +180,6 @@ final class WallpaperSource {
                 if (url.isEmpty()) url = ii.optString("url");
                 if (!url.isEmpty()) list.add(url);
             }
-        }
-        return list;
-    }
-
-    /** 100 random Astronomy Pictures of the Day (about one request per hour while in use). */
-    private static List<String> nasa() throws Exception {
-        JSONArray a = new JSONArray(getText(
-                "https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&count=100"));
-        List<String> list = new ArrayList<>();
-        for (int i = 0; i < a.length(); i++) {
-            JSONObject o = a.getJSONObject(i);
-            if (!"image".equals(o.optString("media_type"))) continue; // skip videos
-            String u = o.optString("hdurl");
-            if (u.isEmpty()) u = o.optString("url");
-            if (u.isEmpty()) continue;
-            list.add(u.startsWith("http://") ? "https://" + u.substring(7) : u);
         }
         return list;
     }

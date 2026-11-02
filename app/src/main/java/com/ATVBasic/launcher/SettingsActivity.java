@@ -11,8 +11,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * Floating settings window: system settings plus a wallpaper source menu (Wallhaven, Bing,
- * Wikimedia Commons, NASA, Picsum). Choosing a source starts a 30 s rotation: Wallhaven shows its
+ * Floating settings window: system settings plus a wallpaper source menu (Wallhaven, Wikimedia,
+ * Picsum, Bing). Choosing a source starts a 30 s rotation: Wallhaven shows its
  * most-liked pictures, the others random ones.
  */
 public final class SettingsActivity extends Activity {
@@ -27,8 +27,8 @@ public final class SettingsActivity extends Activity {
 
     /** Menu order. */
     private static final int[] SOURCES = {
-            WallpaperSource.WALLHAVEN, WallpaperSource.BING,
-            WallpaperSource.WIKIMEDIA, WallpaperSource.NASA, WallpaperSource.PICSUM
+            WallpaperSource.WALLHAVEN, WallpaperSource.WIKIMEDIA,
+            WallpaperSource.PICSUM, WallpaperSource.BING
     };
 
     private boolean busy;
@@ -38,7 +38,6 @@ public final class SettingsActivity extends Activity {
             case WallpaperSource.WALLHAVEN: return R.string.src_wallhaven;
             case WallpaperSource.BING: return R.string.src_bing;
             case WallpaperSource.WIKIMEDIA: return R.string.src_wikimedia;
-            case WallpaperSource.NASA: return R.string.src_nasa;
             case WallpaperSource.PICSUM: return R.string.src_picsum;
             default: return R.string.source_none;
         }
