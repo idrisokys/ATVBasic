@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">ATV Basic</string>
     <string name="settings">Ayarlar</string>
+    <string name="next_wallpaper">Sonraki resim</string>
 
     <string name="add_app">+ Uygulama ekle</string>
     <string name="menu_add_dock">Dock\'a ekle</string>

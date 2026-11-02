@@ -142,6 +142,7 @@ public final class LauncherActivity extends Activity {
         });
         findViewById(R.id.settings).setOnClickListener(
                 v -> startActivity(new Intent(this, SettingsActivity.class)));
+        findViewById(R.id.next_wallpaper).setOnClickListener(v -> nextWallpaper());
 
         IntentFilter pkg = new IntentFilter();
         pkg.addAction(Intent.ACTION_PACKAGE_ADDED);
@@ -386,6 +387,41 @@ public final class LauncherActivity extends Activity {
                 scheduleRotate();
             });
         }, "atv-rotate");
+        t.setPriority(Thread.MIN_PRIORITY);
+        t.start();
+    }
+
+    /**
+     * "Next" button: fetches the next picture right away from the selected source. When rotation is
+     * off or Bing daily is selected, Wallhaven (nature) is used; the saved settings stay unchanged.
+     */
+    private void nextWallpaper() {
+        if (rotating) return;
+        final int src = (autoSource == 0 || autoSource == WallpaperSource.BING_DAILY)
+                ? WallpaperSource.WALLHAVEN : autoSource;
+        final int mode = src == WallpaperSource.WALLHAVEN
+                ? WallpaperSource.POPULAR : WallpaperSource.RANDOM;
+        rotating = true;
+        ui.removeCallbacks(rotate);
+        Toast.makeText(this, R.string.toast_working, Toast.LENGTH_SHORT).show();
+        final Context app = getApplicationContext();
+        Thread t = new Thread(() -> {
+            boolean ok = false;
+            try {
+                ok = WallpaperSource.fetchAndSet(app, src, mode);
+            } catch (RuntimeException ignored) {
+                // reported below
+            }
+            final boolean result = ok;
+            ui.post(() -> {
+                rotating = false;
+                if (isDestroyed()) return;
+                if (result && resumed) loadWallpaper(WallpaperStore.stamp(this));
+                else if (!result) Toast.makeText(this, R.string.toast_wallpaper_failed,
+                        Toast.LENGTH_SHORT).show();
+                scheduleRotate();
+            });
+        }, "atv-next");
         t.setPriority(Thread.MIN_PRIORITY);
         t.start();
     }

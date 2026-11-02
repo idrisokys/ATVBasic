@@ -23,7 +23,7 @@ import java.util.Random;
 /**
  * Online wallpaper sources for a TV. None of them needs an API key.
  *
- *  - Wallhaven:  16:9, at least Full HD, most-favorited first (sorting=favorites).
+ *  - Wallhaven:  nature pictures (q=nature, general category), 16:9, at least Full HD, most-favorited first (sorting=favorites).
  *  - Bing:       the last 8 daily photos in Full HD (1080p); BING_DAILY = only today's photo.
  *  - Wikimedia:  Commons "Featured pictures" (community-voted), filtered to wide, big images.
  *  - Picsum:     a random photo at the exact screen size.
@@ -125,8 +125,8 @@ final class WallpaperSource {
     }
 
     private static List<String> wallhaven(int mode) throws Exception {
-        String q = "https://wallhaven.cc/api/v1/search?categories=111&purity=100"
-                + "&atleast=1920x1080&ratios=16x9";
+        String q = "https://wallhaven.cc/api/v1/search?categories=100&purity=100"
+                + "&q=nature&atleast=1920x1080&ratios=16x9";
         q += mode == POPULAR
                 ? "&sorting=favorites&order=desc&page=" + (1 + RND.nextInt(5))
                 : "&sorting=random";
