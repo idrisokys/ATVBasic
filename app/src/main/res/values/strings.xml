@@ -14,6 +14,11 @@
     <string name="toast_added_dock">Dock\'a eklendi</string>
     <string name="toast_unavailable">Açılamadı</string>
 
+    <string name="row_default_home">Varsayılan launcher yap</string>
+    <string name="default_home_title">Varsayılan launcher</string>
+    <string name="default_home_message">ATV Basic ana ekran (Home tuşu) olarak ayarlansın mı?</string>
+    <string name="default_home_yes">Evet</string>
+    <string name="default_home_no">Şimdi değil</string>
     <string name="row_system_settings">Sistem ayarları</string>
     <string name="src_wikimedia">Wikimedia</string>
     <string name="src_wallhaven">Wallhaven</string>

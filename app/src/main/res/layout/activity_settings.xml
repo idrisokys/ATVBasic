@@ -13,6 +13,11 @@
         android:textSize="24sp" />
 
     <TextView
+        android:id="@+id/row_default_home"
+        style="@style/SettingsRow"
+        android:text="@string/row_default_home" />
+
+    <TextView
         android:id="@+id/row_wallhaven"
         style="@style/SettingsRow"
         android:text="@string/src_wallhaven" />

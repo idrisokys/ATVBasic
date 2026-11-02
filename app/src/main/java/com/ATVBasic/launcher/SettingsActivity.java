@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.provider.Settings;
+import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -61,6 +62,16 @@ public final class SettingsActivity extends Activity {
                 Toast.makeText(this, R.string.toast_unavailable, Toast.LENGTH_SHORT).show();
             }
         });
+
+        View home = findViewById(R.id.row_default_home);
+        if (HomeRole.isDefault(this)) {
+            home.setVisibility(View.GONE);
+        } else {
+            home.setOnClickListener(v -> {
+                HomeRole.request(this);
+                finish();
+            });
+        }
 
         for (int i = 0; i < ROW_IDS.length; i++) {
             final int source = ROW_SOURCES[i];

@@ -151,6 +151,23 @@ public final class LauncherActivity extends Activity {
         register(packageReceiver, pkg);
 
         scan();
+
+        // First launch only: offer to become the default home screen.
+        if (!prefs.getBoolean("home_asked", false)) {
+            prefs.edit().putBoolean("home_asked", true).apply();
+            if (!HomeRole.isDefault(this)) ui.post(this::askDefaultHome);
+        }
+    }
+
+    private void askDefaultHome() {
+        if (isFinishing() || isDestroyed()) return;
+        dialog = new AlertDialog.Builder(this, R.style.Theme_ATVBasic_Dialog)
+                .setTitle(R.string.default_home_title)
+                .setMessage(R.string.default_home_message)
+                .setPositiveButton(R.string.default_home_yes, (d, w) -> HomeRole.request(this))
+                .setNegativeButton(R.string.default_home_no, null)
+                .create();
+        dialog.show();
     }
 
     @Override
