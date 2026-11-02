@@ -173,8 +173,8 @@ public final class LauncherActivity extends Activity {
         if (stamp != shownStamp) loadWallpaper(stamp);
         resumed = true;
         SharedPreferences sp = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE);
-        autoSource = sp.getInt(SettingsActivity.KEY_AUTO, 0); // 0 = static (file); only Settings changes it
-        autoMode = sp.getInt(SettingsActivity.KEY_MODE, 0);
+        autoSource = sp.getInt(SettingsActivity.KEY_AUTO, SettingsActivity.DEFAULT_SOURCE); // 0 = off; first launch = Wallhaven
+        autoMode = sp.getInt(SettingsActivity.KEY_MODE, SettingsActivity.DEFAULT_MODE);
         scheduleRotate();
         showUi();
     }
@@ -352,7 +352,8 @@ public final class LauncherActivity extends Activity {
             // Single picture: only refresh it once it is older than half a day.
             ui.postDelayed(rotate, dailyStale() ? 2_000 : DAILY_CHECK_MS);
         } else {
-            ui.postDelayed(rotate, ROTATE_INTERVAL_MS);
+            // No picture yet (first launch): fetch the first one right away.
+            ui.postDelayed(rotate, WallpaperStore.stamp(this) == 0 ? 2_000 : ROTATE_INTERVAL_MS);
         }
     }
 
@@ -363,14 +364,30 @@ public final class LauncherActivity extends Activity {
 
     /** Auto-rotation: downloads a new wallpaper every 60 s while the home screen is visible. */
     private void rotateWallpaper() {
-        final int src = autoSource;
-        final int mode = autoMode;
-        if (src == 0 || !resumed || rotating) return;
-        if (src == WallpaperSource.BING_DAILY && !dailyStale()) {
+        if (autoSource == 0 || !resumed || rotating) return;
+        if (autoSource == WallpaperSource.BING_DAILY && !dailyStale()) {
             scheduleRotate();
             return;
         }
+        fetchWallpaper(autoSource, autoMode, false);
+    }
+
+    /**
+     * "Next" button: fetches the next picture right away from the selected source. When rotation is
+     * off or Bing daily is selected, Wallhaven (nature) is used; the saved settings stay unchanged.
+     */
+    private void nextWallpaper() {
+        if (rotating) return;
+        boolean fixed = autoSource == 0 || autoSource == WallpaperSource.BING_DAILY;
+        int src = fixed ? WallpaperSource.WALLHAVEN : autoSource;
+        int mode = fixed ? WallpaperSource.POPULAR : autoMode;
+        fetchWallpaper(src, mode, true);
+    }
+
+    /** Downloads one picture on a low-priority thread, shows it, then re-arms the rotation timer. */
+    private void fetchWallpaper(final int src, final int mode, final boolean manual) {
         rotating = true;
+        ui.removeCallbacks(rotate);
         final Context app = getApplicationContext();
         Thread t = new Thread(() -> {
             boolean ok = false;
@@ -384,44 +401,12 @@ public final class LauncherActivity extends Activity {
                 rotating = false;
                 if (isDestroyed()) return;
                 if (result && resumed) loadWallpaper(WallpaperStore.stamp(this));
+                else if (!result && manual) {
+                    Toast.makeText(this, R.string.toast_wallpaper_failed, Toast.LENGTH_SHORT).show();
+                }
                 scheduleRotate();
             });
-        }, "atv-rotate");
-        t.setPriority(Thread.MIN_PRIORITY);
-        t.start();
-    }
-
-    /**
-     * "Next" button: fetches the next picture right away from the selected source. When rotation is
-     * off or Bing daily is selected, Wallhaven (nature) is used; the saved settings stay unchanged.
-     */
-    private void nextWallpaper() {
-        if (rotating) return;
-        final int src = (autoSource == 0 || autoSource == WallpaperSource.BING_DAILY)
-                ? WallpaperSource.WALLHAVEN : autoSource;
-        final int mode = src == WallpaperSource.WALLHAVEN
-                ? WallpaperSource.POPULAR : WallpaperSource.RANDOM;
-        rotating = true;
-        ui.removeCallbacks(rotate);
-        Toast.makeText(this, R.string.toast_working, Toast.LENGTH_SHORT).show();
-        final Context app = getApplicationContext();
-        Thread t = new Thread(() -> {
-            boolean ok = false;
-            try {
-                ok = WallpaperSource.fetchAndSet(app, src, mode);
-            } catch (RuntimeException ignored) {
-                // reported below
-            }
-            final boolean result = ok;
-            ui.post(() -> {
-                rotating = false;
-                if (isDestroyed()) return;
-                if (result && resumed) loadWallpaper(WallpaperStore.stamp(this));
-                else if (!result) Toast.makeText(this, R.string.toast_wallpaper_failed,
-                        Toast.LENGTH_SHORT).show();
-                scheduleRotate();
-            });
-        }, "atv-next");
+        }, "atv-wallpaper");
         t.setPriority(Thread.MIN_PRIORITY);
         t.start();
     }

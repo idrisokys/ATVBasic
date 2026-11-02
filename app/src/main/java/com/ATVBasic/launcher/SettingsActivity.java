@@ -3,8 +3,6 @@ package com.ATVBasic.launcher;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Handler;
-import android.os.Looper;
 import android.provider.Settings;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -16,13 +14,13 @@ import android.widget.Toast;
  */
 public final class SettingsActivity extends Activity {
 
-    private interface Job {
-        boolean run() throws Exception;
-    }
-
     static final String PREFS = "settings";
     static final String KEY_AUTO = "auto_source"; // 0 = off, else a WallpaperSource id
     static final String KEY_MODE = "auto_mode";   // WallpaperSource.RANDOM / POPULAR
+
+    /** First launch (nothing saved yet): Wallhaven nature, most-liked first. */
+    static final int DEFAULT_SOURCE = WallpaperSource.WALLHAVEN;
+    static final int DEFAULT_MODE = WallpaperSource.POPULAR;
 
     private static final int[] ROW_IDS = {
             R.id.row_wallhaven, R.id.row_wikimedia, R.id.row_picsum, R.id.row_bing,
@@ -43,7 +41,7 @@ public final class SettingsActivity extends Activity {
 
     /** Shows a dot at the right edge of the row that is currently active. */
     private void updateDots() {
-        int current = getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_AUTO, 0);
+        int current = getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_AUTO, DEFAULT_SOURCE);
         for (int i = 0; i < ROW_IDS.length; i++) {
             TextView row = (TextView) findViewById(ROW_IDS[i]);
             row.setCompoundDrawablesWithIntrinsicBounds(0, 0,
@@ -79,45 +77,41 @@ public final class SettingsActivity extends Activity {
     private void turnOff() {
         getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                 .putInt(KEY_AUTO, 0).putInt(KEY_MODE, WallpaperSource.RANDOM).apply();
-        updateDots();
         Toast.makeText(this, R.string.toast_rotation_off, Toast.LENGTH_SHORT).show();
         finish();
     }
 
-    /** Fetches one picture now and, on success, selects this source (rotating every 60 s, or fixed for Bing daily). */
+    /**
+     * Fetches one picture now and, on success, selects this source (rotating every 60 s, or fixed
+     * for Bing daily) and closes. A failure only shows a toast and keeps the old selection.
+     */
     private void choose(final int source) {
-        final int mode = modeFor(source);
-        final Context app = getApplicationContext();
-        runJob(() -> {
-            boolean ok = WallpaperSource.fetchAndSet(app, source, mode);
-            if (ok) {
-                app.getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                        .putInt(KEY_AUTO, source).putInt(KEY_MODE, mode).apply();
-            }
-            return ok;
-        }, source == WallpaperSource.BING_DAILY ? R.string.toast_bing_daily : R.string.toast_auto_on);
-    }
-
-    /** Runs {@code job} on a background thread, reports the result with a toast, then closes. */
-    private void runJob(final Job job, final int successMessage) {
         if (busy) return;
         busy = true;
+        final int mode = modeFor(source);
         final Context app = getApplicationContext();
-        final Handler main = new Handler(Looper.getMainLooper());
-        Toast.makeText(app, R.string.toast_working, Toast.LENGTH_SHORT).show();
         Thread t = new Thread(() -> {
             boolean ok = false;
             try {
-                ok = job.run();
-            } catch (Exception | OutOfMemoryError ignored) {
+                ok = WallpaperSource.fetchAndSet(app, source, mode);
+                if (ok) {
+                    app.getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                            .putInt(KEY_AUTO, source).putInt(KEY_MODE, mode).apply();
+                }
+            } catch (RuntimeException ignored) {
                 // reported below as a failure
             }
             final boolean result = ok;
-            main.post(() -> {
-                Toast.makeText(app, result ? successMessage
-                        : R.string.toast_wallpaper_failed, Toast.LENGTH_SHORT).show();
+            runOnUiThread(() -> {
                 busy = false;
-                if (result && !isFinishing()) finish();
+                if (!result) {
+                    Toast.makeText(app, R.string.toast_wallpaper_failed, Toast.LENGTH_SHORT).show();
+                } else {
+                    if (source == WallpaperSource.BING_DAILY) {
+                        Toast.makeText(app, R.string.toast_bing_daily, Toast.LENGTH_SHORT).show();
+                    }
+                    if (!isFinishing()) finish();
+                }
             });
         }, "atv-wallpaper");
         t.setPriority(Thread.MIN_PRIORITY);

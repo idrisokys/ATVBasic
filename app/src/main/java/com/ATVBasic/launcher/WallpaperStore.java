@@ -6,7 +6,6 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.net.Uri;
 import android.util.DisplayMetrics;
 
 import java.io.File;
@@ -42,15 +41,6 @@ final class WallpaperStore {
         } catch (OutOfMemoryError e) {
             return null;
         }
-    }
-
-    static boolean importUri(Context c, Uri uri) throws IOException {
-        File tmp = new File(c.getCacheDir(), "wp_pick");
-        try (InputStream in = c.getContentResolver().openInputStream(uri)) {
-            if (in == null) return false;
-            copy(in, tmp);
-        }
-        return importFile(c, tmp);
     }
 
     /** Scales/crops {@code src} to the screen size, saves it as the wallpaper, deletes {@code src}. */

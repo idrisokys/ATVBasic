@@ -46,6 +46,7 @@ final class WallpaperSource {
     static final int POPULAR = 1;
 
     private static final long POOL_TTL_MS = 60 * 60_000L;
+    private static final long MAX_WALLHAVEN_BYTES = 8L * 1024 * 1024;
     private static final long MAX_JSON_BYTES = 2L * 1024 * 1024;
     private static final Random RND = new Random();
 
@@ -133,7 +134,10 @@ final class WallpaperSource {
         JSONArray data = new JSONObject(getText(q)).getJSONArray("data");
         List<String> list = new ArrayList<>();
         for (int i = 0; i < data.length(); i++) {
-            String path = data.getJSONObject(i).optString("path");
+            JSONObject item = data.getJSONObject(i);
+            // Originals are downloaded as they are: skip the very big ones (slow, memory hungry).
+            if (item.optLong("file_size") > MAX_WALLHAVEN_BYTES) continue;
+            String path = item.optString("path");
             if (!path.isEmpty()) list.add(path);
         }
         return list;
