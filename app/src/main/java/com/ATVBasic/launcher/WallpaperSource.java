@@ -41,6 +41,8 @@ final class WallpaperSource {
     static final int WALLHAVEN = 3;
     static final int PIXABAY = 4;
     static final int BING = 5;
+    /** Wallhaven + Unsplash + Pixabay, most-liked pictures, taken in turn. */
+    static final int MIX = 6;
 
     /** Modes for every source except Picsum. */
     static final int RANDOM = 0;
@@ -86,28 +88,38 @@ final class WallpaperSource {
 
     // ------------------------------------------------------------------ API keys
 
-    /** SharedPreferences name for a source's API key (Pixabay / Unsplash only). */
-    static String prefKey(int source) {
-        return source == PIXABAY ? "key_pixabay" : "key_unsplash";
-    }
-
-    /** Key typed in Settings, else the one baked in at build time (may be empty). */
+    /** Keys are baked in at build time (PIXABAY_KEY / UNSPLASH_KEY); either may be empty. */
     static String apiKey(Context c, int source) {
-        String v = c.getSharedPreferences(SettingsActivity.PREFS, Context.MODE_PRIVATE)
-                .getString(prefKey(source), "");
-        if (v != null && !v.trim().isEmpty()) return v.trim();
         return source == PIXABAY ? BuildConfig.PIXABAY_KEY : BuildConfig.UNSPLASH_KEY;
-    }
-
-    /** Pixabay cannot be used without a key (Unsplash falls back to a curated list). */
-    static boolean missingKey(Context c, int source) {
-        return source == PIXABAY && apiKey(c, source).isEmpty();
     }
 
     // ------------------------------------------------------------------ public entry
 
     /** Blocking. Downloads a picture from {@code source} and installs it as the wallpaper. */
     static boolean fetchAndSet(Context ctx, int source, int mode) {
+        if (source == MIX) return fetchMix(ctx);
+        return fetchOne(ctx, source, mode);
+    }
+
+    private static int mixTurn;
+
+    /** One picture from the next source in turn; if it fails the following source is tried. */
+    private static boolean fetchMix(Context ctx) {
+        List<Integer> order = new ArrayList<>();
+        order.add(WALLHAVEN);
+        order.add(UNSPLASH);
+        if (!apiKey(ctx, PIXABAY).isEmpty()) order.add(PIXABAY); // Pixabay needs a key
+        int start;
+        synchronized (WallpaperSource.class) {
+            start = mixTurn++ % order.size();
+        }
+        for (int i = 0; i < order.size(); i++) {
+            if (fetchOne(ctx, order.get((start + i) % order.size()), POPULAR)) return true;
+        }
+        return false;
+    }
+
+    private static boolean fetchOne(Context ctx, int source, int mode) {
         File out = new File(ctx.getCacheDir(), "wp_download");
         try {
             DisplayMetrics dm = ctx.getResources().getDisplayMetrics();

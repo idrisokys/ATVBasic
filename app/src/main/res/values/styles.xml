@@ -13,6 +13,12 @@
         <item name="android:backgroundDimAmount">0.25</item>
     </style>
 
+    <!-- Translucent list/alert dialogs (dock pickers, source modes). -->
+    <style name="Theme.ATVBasic.Dialog" parent="@android:style/Theme.DeviceDefault.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/panel_bg</item>
+        <item name="android:backgroundDimAmount">0.2</item>
+    </style>
+
     <style name="TopButton">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>

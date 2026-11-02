@@ -9,13 +9,12 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
-import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * Floating settings window. A file wallpaper is static; picking an online source (Wallhaven,
- * Unsplash, Pixabay, Bing, Picsum) turns on auto-rotation every 30 s from that source.
+ * Floating settings window. A file wallpaper is static; picking an online source (Wallhaven +
+ * Unsplash + Pixabay most-liked, Bing, Picsum) turns on auto-rotation every 30 s.
  */
 public final class SettingsActivity extends Activity {
 
@@ -28,11 +27,8 @@ public final class SettingsActivity extends Activity {
     static final String PREFS = "settings";
     static final String KEY_AUTO = "auto_source";   // 0 = off (static), else WallpaperSource id
     static final String KEY_MODE = "auto_mode";     // WallpaperSource.RANDOM / POPULAR (Picsum: variant)
-    static final String KEY_LAST = "last_source";   // remembered for the on/off toggle
-    static final String KEY_LAST_MODE = "last_mode";
 
     private boolean busy;
-    private TextView autoRow;
 
     private SharedPreferences prefs() {
         return getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -59,30 +55,15 @@ public final class SettingsActivity extends Activity {
         return R.string.mode_random;
     }
 
-    private void updateAutoRow() {
-        SharedPreferences p = prefs();
-        int src = p.getInt(KEY_AUTO, 0);
-        String state = src == 0 ? getString(R.string.auto_off)
-                : getString(sourceName(src)) + " · " + getString(modeName(src, p.getInt(KEY_MODE, 0)));
-        autoRow.setText(getString(R.string.row_auto, state));
-    }
-
     @Override
     protected void onCreate(android.os.Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
         findViewById(R.id.row_file).setOnClickListener(v -> pickFile());
-        findViewById(R.id.row_wallhaven).setOnClickListener(v -> showModes(WallpaperSource.WALLHAVEN));
-        findViewById(R.id.row_unsplash).setOnClickListener(v -> showModes(WallpaperSource.UNSPLASH));
-        findViewById(R.id.row_pixabay).setOnClickListener(v -> showModes(WallpaperSource.PIXABAY));
+        findViewById(R.id.row_online).setOnClickListener(v -> choose(WallpaperSource.MIX, WallpaperSource.POPULAR));
         findViewById(R.id.row_bing).setOnClickListener(v -> showModes(WallpaperSource.BING));
         findViewById(R.id.row_picsum).setOnClickListener(v -> showModes(WallpaperSource.PICSUM));
-        findViewById(R.id.row_keys).setOnClickListener(v -> showKeys());
-
-        autoRow = (TextView) findViewById(R.id.row_auto);
-        updateAutoRow();
-        autoRow.setOnClickListener(v -> toggleAuto());
 
         findViewById(R.id.row_system).setOnClickListener(v -> {
             try {
@@ -91,24 +72,7 @@ public final class SettingsActivity extends Activity {
                 Toast.makeText(this, R.string.toast_unavailable, Toast.LENGTH_SHORT).show();
             }
         });
-        findViewById(R.id.row_file).requestFocus();
-    }
-
-    /** Rotation on/off without picking a source again. */
-    private void toggleAuto() {
-        SharedPreferences p = prefs();
-        if (p.getInt(KEY_AUTO, 0) != 0) {
-            p.edit().putInt(KEY_AUTO, 0).apply();
-        } else {
-            int last = p.getInt(KEY_LAST, 0);
-            if (last == 0) {
-                Toast.makeText(this, R.string.toast_pick_source, Toast.LENGTH_SHORT).show();
-            } else {
-                p.edit().putInt(KEY_AUTO, last).putInt(KEY_MODE, p.getInt(KEY_LAST_MODE, 0)).apply();
-                Toast.makeText(this, R.string.toast_auto_on, Toast.LENGTH_SHORT).show();
-            }
-        }
-        updateAutoRow();
+        findViewById(R.id.row_system).requestFocus();
     }
 
     private void pickFile() {
@@ -154,7 +118,7 @@ public final class SettingsActivity extends Activity {
                     getString(modeName(source, WallpaperSource.POPULAR))
             };
         }
-        new AlertDialog.Builder(this)
+        new AlertDialog.Builder(this, R.style.Theme_ATVBasic_Dialog)
                 .setTitle(getString(R.string.source_dialog_title, getString(sourceName(source))))
                 .setItems(items, (d, which) -> choose(source, which))
                 .show();
@@ -162,51 +126,15 @@ public final class SettingsActivity extends Activity {
 
     /** Fetches one picture now and, on success, turns on 30 s rotation for this source/mode. */
     private void choose(final int source, final int mode) {
-        if (WallpaperSource.missingKey(this, source)) {
-            Toast.makeText(this, getString(R.string.toast_key_missing,
-                    getString(sourceName(source))), Toast.LENGTH_LONG).show();
-            askKey(source);
-            return;
-        }
         final Context app = getApplicationContext();
         runJob(() -> {
             boolean ok = WallpaperSource.fetchAndSet(app, source, mode);
             if (ok) {
                 app.getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                        .putInt(KEY_AUTO, source).putInt(KEY_MODE, mode)
-                        .putInt(KEY_LAST, source).putInt(KEY_LAST_MODE, mode).apply();
+                        .putInt(KEY_AUTO, source).putInt(KEY_MODE, mode).apply();
             }
             return ok;
         }, R.string.toast_auto_on);
-    }
-
-    // ------------------------------------------------------------------ API keys
-
-    private void showKeys() {
-        String[] items = {getString(R.string.src_pixabay), getString(R.string.src_unsplash)};
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.keys_title)
-                .setItems(items, (d, which) ->
-                        askKey(which == 0 ? WallpaperSource.PIXABAY : WallpaperSource.UNSPLASH))
-                .show();
-    }
-
-    private void askKey(final int source) {
-        final EditText et = new EditText(this);
-        et.setSingleLine(true);
-        et.setText(WallpaperSource.apiKey(this, source));
-        et.setSelection(et.length());
-        new AlertDialog.Builder(this)
-                .setTitle(getString(R.string.keys_title) + " – " + getString(sourceName(source)))
-                .setMessage(R.string.key_hint)
-                .setView(et)
-                .setPositiveButton(android.R.string.ok, (d, w) -> {
-                    prefs().edit().putString(WallpaperSource.prefKey(source),
-                            et.getText().toString().trim()).apply();
-                    Toast.makeText(this, R.string.toast_key_saved, Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
     }
 
     /** Runs {@code job} on a background thread, reports the result with a toast, then closes. */

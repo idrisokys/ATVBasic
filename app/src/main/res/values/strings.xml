@@ -14,15 +14,10 @@
     <string name="toast_unavailable">Açılamadı</string>
 
     <string name="row_wallpaper_file">Dosyadan duvar kağıdı ayarla (sabit)</string>
-    <string name="row_wallpaper_wallhaven">Wallhaven duvar kağıdı</string>
-    <string name="row_wallpaper_unsplash">Unsplash duvar kağıdı</string>
-    <string name="row_wallpaper_pixabay">Pixabay duvar kağıdı</string>
+    <string name="row_wallpaper_online">Wallhaven · Unsplash · Pixabay (en sevilenler)</string>
     <string name="row_wallpaper_bing">Bing duvar kağıdı</string>
     <string name="row_wallpaper_picsum">Picsum duvar kağıdı</string>
-    <string name="row_auto">Otomatik değiştir (30 sn): %1$s</string>
-    <string name="auto_off">Kapalı (sabit)</string>
     <string name="row_system_settings">Sistem ayarları</string>
-    <string name="row_keys">API anahtarları (Pixabay / Unsplash)</string>
     <string name="src_picsum">Picsum</string>
     <string name="src_unsplash">Unsplash</string>
     <string name="src_wallhaven">Wallhaven</string>
@@ -35,12 +30,7 @@
     <string name="picsum_random">Rastgele</string>
     <string name="picsum_grayscale">Rastgele (siyah-beyaz)</string>
     <string name="picsum_blur">Rastgele (bulanık)</string>
-    <string name="keys_title">API anahtarı</string>
-    <string name="key_hint">Ücretsiz anahtar: pixabay.com/api/docs\nUnsplash anahtarı isteğe bağlıdır: unsplash.com/developers</string>
-    <string name="toast_key_saved">Anahtar kaydedildi</string>
-    <string name="toast_key_missing">%1$s için API anahtarı gerekli</string>
     <string name="toast_auto_on">Her 30 saniyede bir değişecek</string>
-    <string name="toast_pick_source">Önce bir çevrimiçi kaynak seç</string>
     <string name="toast_working">Çalışıyor…</string>
     <string name="toast_wallpaper_set">Duvar kağıdı ayarlandı</string>
     <string name="toast_wallpaper_failed">Duvar kağıdı alınamadı</string>

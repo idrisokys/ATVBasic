@@ -504,7 +504,7 @@ public final class LauncherActivity extends Activity {
         String[] names = new String[apps.size()];
         for (int i = 0; i < names.length; i++) names[i] = apps.get(i).label;
         dismissDialog();
-        dialog = new AlertDialog.Builder(this)
+        dialog = new AlertDialog.Builder(this, R.style.Theme_ATVBasic_Dialog)
                 .setItems(names, (d, which) -> setSlot(idx, apps.get(which).pkg))
                 .create();
         dialog.show();
@@ -545,7 +545,7 @@ public final class LauncherActivity extends Activity {
         String[] names = new String[DOCK_SLOTS];
         for (int i = 0; i < DOCK_SLOTS; i++) names[i] = slotEntry(i).label;
         dismissDialog();
-        dialog = new AlertDialog.Builder(this)
+        dialog = new AlertDialog.Builder(this, R.style.Theme_ATVBasic_Dialog)
                 .setTitle(R.string.replace_which)
                 .setItems(names, (d, which) -> setSlot(which, e.pkg))
                 .create();
@@ -570,7 +570,7 @@ public final class LauncherActivity extends Activity {
 
     private void choose(String title, List<String> labels, final List<Runnable> actions) {
         dismissDialog();
-        dialog = new AlertDialog.Builder(this)
+        dialog = new AlertDialog.Builder(this, R.style.Theme_ATVBasic_Dialog)
                 .setTitle(title)
                 .setItems(labels.toArray(new String[0]), (d, which) -> actions.get(which).run())
                 .create();
