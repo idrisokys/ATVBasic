@@ -57,8 +57,9 @@ final class WallpaperStore {
     static boolean importFile(Context c, File src) throws IOException {
         try {
             DisplayMetrics dm = c.getResources().getDisplayMetrics();
-            int tw = Math.max(dm.widthPixels, dm.heightPixels);
-            int th = Math.min(dm.widthPixels, dm.heightPixels);
+            // 1080p is plenty for a wallpaper and keeps memory low on 4K TVs (the view scales it up).
+            int tw = Math.min(Math.max(dm.widthPixels, dm.heightPixels), 1920);
+            int th = Math.min(Math.min(dm.widthPixels, dm.heightPixels), 1080);
 
             BitmapFactory.Options o = new BitmapFactory.Options();
             o.inJustDecodeBounds = true;

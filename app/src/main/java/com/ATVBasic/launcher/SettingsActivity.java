@@ -1,7 +1,6 @@
 package com.ATVBasic.launcher;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
@@ -11,9 +10,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * Floating settings window: system settings plus a wallpaper source menu (Wallhaven, Wikimedia,
- * Picsum, Bing). Choosing a source starts a 30 s rotation: Wallhaven shows its
- * most-liked pictures, the others random ones.
+ * Floating settings window: system settings plus a stacked wallpaper list (Wallhaven, Wikimedia,
+ * Picsum, Bing, rotation off, Bing picture of the day); the active row shows a dot. Choosing a
+ * source starts a 60 s rotation (Bing daily = one fixed picture).
  */
 public final class SettingsActivity extends Activity {
 
@@ -25,33 +24,31 @@ public final class SettingsActivity extends Activity {
     static final String KEY_AUTO = "auto_source"; // 0 = off, else a WallpaperSource id
     static final String KEY_MODE = "auto_mode";   // WallpaperSource.RANDOM / POPULAR
 
-    /** Menu order. */
-    private static final int[] SOURCES = {
+    private static final int[] ROW_IDS = {
+            R.id.row_wallhaven, R.id.row_wikimedia, R.id.row_picsum, R.id.row_bing,
+            R.id.row_off, R.id.row_bing_daily
+    };
+    /** Source behind each row; 0 = rotation off. Same order as ROW_IDS. */
+    private static final int[] ROW_SOURCES = {
             WallpaperSource.WALLHAVEN, WallpaperSource.WIKIMEDIA,
-            WallpaperSource.PICSUM, WallpaperSource.BING
+            WallpaperSource.PICSUM, WallpaperSource.BING, 0, WallpaperSource.BING_DAILY
     };
 
     private boolean busy;
-
-    private static int sourceName(int source) {
-        switch (source) {
-            case WallpaperSource.WALLHAVEN: return R.string.src_wallhaven;
-            case WallpaperSource.BING: return R.string.src_bing;
-            case WallpaperSource.WIKIMEDIA: return R.string.src_wikimedia;
-            case WallpaperSource.PICSUM: return R.string.src_picsum;
-            default: return R.string.source_none;
-        }
-    }
 
     /** Most-liked pictures for Wallhaven, random ones for the others. */
     private static int modeFor(int source) {
         return source == WallpaperSource.WALLHAVEN ? WallpaperSource.POPULAR : WallpaperSource.RANDOM;
     }
 
-    private void updateSourceRow(TextView row) {
-        int src = getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_AUTO, 0);
-        String name = getString(sourceName(src));
-        row.setText(getString(R.string.row_source, name));
+    /** Shows a dot at the right edge of the row that is currently active. */
+    private void updateDots() {
+        int current = getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_AUTO, 0);
+        for (int i = 0; i < ROW_IDS.length; i++) {
+            TextView row = (TextView) findViewById(ROW_IDS[i]);
+            row.setCompoundDrawablesWithIntrinsicBounds(0, 0,
+                    ROW_SOURCES[i] == current ? R.drawable.selected_dot : 0, 0);
+        }
     }
 
     @Override
@@ -67,23 +64,27 @@ public final class SettingsActivity extends Activity {
             }
         });
 
-        TextView sourceRow = (TextView) findViewById(R.id.row_source);
-        updateSourceRow(sourceRow);
-        sourceRow.setOnClickListener(v -> showSources());
+        for (int i = 0; i < ROW_IDS.length; i++) {
+            final int source = ROW_SOURCES[i];
+            findViewById(ROW_IDS[i]).setOnClickListener(v -> {
+                if (source == 0) turnOff(); else choose(source);
+            });
+        }
+        updateDots();
 
         findViewById(R.id.row_system).requestFocus();
     }
 
-    private void showSources() {
-        String[] items = new String[SOURCES.length];
-        for (int i = 0; i < items.length; i++) items[i] = getString(sourceName(SOURCES[i]));
-        new AlertDialog.Builder(this, R.style.Theme_ATVBasic_Dialog)
-                .setTitle(R.string.source_dialog_title)
-                .setItems(items, (d, which) -> choose(SOURCES[which]))
-                .show();
+    /** Stops the automatic picture change; the current wallpaper stays. */
+    private void turnOff() {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putInt(KEY_AUTO, 0).putInt(KEY_MODE, WallpaperSource.RANDOM).apply();
+        updateDots();
+        Toast.makeText(this, R.string.toast_rotation_off, Toast.LENGTH_SHORT).show();
+        finish();
     }
 
-    /** Fetches one picture now and, on success, turns on 30 s rotation for this source. */
+    /** Fetches one picture now and, on success, selects this source (rotating every 60 s, or fixed for Bing daily). */
     private void choose(final int source) {
         final int mode = modeFor(source);
         final Context app = getApplicationContext();
@@ -94,7 +95,7 @@ public final class SettingsActivity extends Activity {
                         .putInt(KEY_AUTO, source).putInt(KEY_MODE, mode).apply();
             }
             return ok;
-        }, R.string.toast_auto_on);
+        }, source == WallpaperSource.BING_DAILY ? R.string.toast_bing_daily : R.string.toast_auto_on);
     }
 
     /** Runs {@code job} on a background thread, reports the result with a toast, then closes. */

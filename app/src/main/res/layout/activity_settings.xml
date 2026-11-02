@@ -13,6 +13,32 @@
         android:textSize="24sp" />
 
     <TextView
-        android:id="@+id/row_source"
-        style="@style/SettingsRow" />
+        android:id="@+id/row_wallhaven"
+        style="@style/SettingsRow"
+        android:text="@string/src_wallhaven" />
+
+    <TextView
+        android:id="@+id/row_wikimedia"
+        style="@style/SettingsRow"
+        android:text="@string/src_wikimedia" />
+
+    <TextView
+        android:id="@+id/row_picsum"
+        style="@style/SettingsRow"
+        android:text="@string/src_picsum" />
+
+    <TextView
+        android:id="@+id/row_bing"
+        style="@style/SettingsRow"
+        android:text="@string/src_bing" />
+
+    <TextView
+        android:id="@+id/row_off"
+        style="@style/SettingsRow"
+        android:text="@string/row_rotation_off" />
+
+    <TextView
+        android:id="@+id/row_bing_daily"
+        style="@style/SettingsRow"
+        android:text="@string/row_bing_daily" />
 </LinearLayout>

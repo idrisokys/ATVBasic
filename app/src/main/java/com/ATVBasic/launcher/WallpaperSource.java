@@ -24,11 +24,12 @@ import java.util.Random;
  * Online wallpaper sources for a TV. None of them needs an API key.
  *
  *  - Wallhaven:  16:9, at least Full HD, most-favorited first (sorting=favorites).
- *  - Bing:       the last 8 daily photos in UHD.
+ *  - Bing:       the last 8 daily photos in Full HD (1080p); BING_DAILY = only today's photo.
  *  - Wikimedia:  Commons "Featured pictures" (community-voted), filtered to wide, big images.
  *  - Picsum:     a random photo at the exact screen size.
  *
- * Listings are cached in small in-memory pools (60 min) so a 30 s rotation never repeats a
+ * Everything is downloaded at 1080p at most. Listings are cached in small in-memory pools
+ * (60 min) so a 60 s rotation never repeats a
  * picture and stays far below the services' rate limits.
  */
 final class WallpaperSource {
@@ -38,6 +39,8 @@ final class WallpaperSource {
     static final int WALLHAVEN = 3;
     static final int BING = 5;
     static final int WIKIMEDIA = 6;
+    /** Bing's picture of the day: one single picture, no rotation. */
+    static final int BING_DAILY = 8;
 
     static final int RANDOM = 0;
     static final int POPULAR = 1;
@@ -71,15 +74,12 @@ final class WallpaperSource {
         File out = new File(ctx.getCacheDir(), "wp_download");
         try {
             DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
-            int w = Math.min(Math.max(dm.widthPixels, dm.heightPixels), 3840);
+            int w = Math.min(Math.max(dm.widthPixels, dm.heightPixels), 1920);
             for (int attempt = 0; attempt < 3; attempt++) {
                 String url = nextUrl(source, mode, w);
                 if (url == null) break;
                 try {
                     boolean ok = fetchFile(url, out);
-                    if (!ok && url.endsWith("_UHD.jpg")) { // Bing: fall back to Full HD
-                        ok = fetchFile(url.replace("_UHD.jpg", "_1920x1080.jpg"), out);
-                    }
                     if (ok) return WallpaperStore.importFile(ctx, out);
                 } catch (IOException ignored) {
                     // this picture failed (too large, network): try the next one
@@ -99,7 +99,10 @@ final class WallpaperSource {
             case WALLHAVEN:
                 return pop(source + ":" + mode, () -> wallhaven(mode));
             case BING:
-                return pop(source + ":" + mode, () -> bing());
+                return pop(source + ":" + mode, () -> bing(8));
+            case BING_DAILY:
+                List<String> today = bing(1);
+                return today.isEmpty() ? null : today.get(0);
             case WIKIMEDIA:
                 return pop(source + ":" + mode, () -> wikimedia(w));
             case PICSUM:
@@ -136,14 +139,14 @@ final class WallpaperSource {
         return list;
     }
 
-    private static List<String> bing() throws Exception {
+    private static List<String> bing(int count) throws Exception {
         JSONArray a = new JSONObject(getText(
-                "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=tr-TR"))
+                "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=" + count + "&mkt=tr-TR"))
                 .getJSONArray("images");
         List<String> list = new ArrayList<>();
         for (int i = 0; i < a.length(); i++) {
             String base = a.getJSONObject(i).optString("urlbase");
-            if (!base.isEmpty()) list.add("https://www.bing.com" + base + "_UHD.jpg");
+            if (!base.isEmpty()) list.add("https://www.bing.com" + base + "_1920x1080.jpg");
         }
         return list;
     }

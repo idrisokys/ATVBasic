@@ -50,7 +50,9 @@ public final class LauncherActivity extends Activity {
     private static final int COLUMNS = 6;
     private static final int DOCK_SLOTS = 6;
     private static final long RELOAD_DELAY_MS = 500;
-    private static final long ROTATE_INTERVAL_MS = 30_000;
+    private static final long ROTATE_INTERVAL_MS = 60_000;
+    private static final long DAILY_CHECK_MS = 60 * 60_000L;
+    private static final long DAILY_STALE_MS = 12 * 60 * 60_000L;
     private static final long IDLE_HIDE_MS = 20_000;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -344,14 +346,29 @@ public final class LauncherActivity extends Activity {
 
     private void scheduleRotate() {
         ui.removeCallbacks(rotate);
-        if (autoSource != 0 && resumed && !rotating) ui.postDelayed(rotate, ROTATE_INTERVAL_MS);
+        if (autoSource == 0 || !resumed || rotating) return;
+        if (autoSource == WallpaperSource.BING_DAILY) {
+            // Single picture: only refresh it once it is older than half a day.
+            ui.postDelayed(rotate, dailyStale() ? 2_000 : DAILY_CHECK_MS);
+        } else {
+            ui.postDelayed(rotate, ROTATE_INTERVAL_MS);
+        }
     }
 
-    /** Auto-rotation: downloads a new wallpaper every 30 s while the home screen is visible. */
+    private boolean dailyStale() {
+        long stamp = WallpaperStore.stamp(this);
+        return stamp == 0 || System.currentTimeMillis() - stamp > DAILY_STALE_MS;
+    }
+
+    /** Auto-rotation: downloads a new wallpaper every 60 s while the home screen is visible. */
     private void rotateWallpaper() {
         final int src = autoSource;
         final int mode = autoMode;
         if (src == 0 || !resumed || rotating) return;
+        if (src == WallpaperSource.BING_DAILY && !dailyStale()) {
+            scheduleRotate();
+            return;
+        }
         rotating = true;
         final Context app = getApplicationContext();
         Thread t = new Thread(() -> {

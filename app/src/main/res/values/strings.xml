@@ -18,10 +18,11 @@
     <string name="src_wallhaven">Wallhaven</string>
     <string name="src_bing">Bing</string>
     <string name="src_picsum">Picsum</string>
-    <string name="toast_auto_on">Her 30 saniyede bir değişecek</string>
+    <string name="toast_auto_on">Her 60 saniyede bir değişecek</string>
     <string name="toast_working">Çalışıyor…</string>
     <string name="toast_wallpaper_failed">Duvar kağıdı alınamadı</string>
-    <string name="row_source">Duvar kağıdı kaynağı: %1$s</string>
-    <string name="source_none">Seçilmedi</string>
-    <string name="source_dialog_title">Duvar kağıdı kaynağı</string>
+    <string name="row_rotation_off">Resim değiştirme kapalı</string>
+    <string name="row_bing_daily">Bing günün resmi</string>
+    <string name="toast_rotation_off">Resim değiştirme kapatıldı</string>
+    <string name="toast_bing_daily">Bing günün resmi ayarlandı</string>
 </resources>
