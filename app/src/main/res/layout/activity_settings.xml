@@ -1,40 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="wrap_content"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="480dp"
     android:layout_height="wrap_content"
-    android:scrollbars="none">
+    android:orientation="vertical"
+    android:padding="24dp">
 
-    <LinearLayout
-        android:layout_width="480dp"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="24dp">
+    <TextView
+        android:id="@+id/row_system"
+        style="@style/SettingsRow"
+        android:layout_marginTop="0dp"
+        android:text="@string/row_system_settings"
+        android:textSize="24sp" />
 
-        <TextView
-            android:id="@+id/row_system"
-            style="@style/SettingsRow"
-            android:layout_marginTop="0dp"
-            android:text="@string/row_system_settings"
-            android:textSize="24sp" />
-
-        <TextView
-            android:id="@+id/row_file"
-            style="@style/SettingsRow"
-            android:text="@string/row_wallpaper_file" />
-
-        <TextView
-            android:id="@+id/row_online"
-            style="@style/SettingsRow"
-            android:text="@string/row_wallpaper_online" />
-
-        <TextView
-            android:id="@+id/row_bing"
-            style="@style/SettingsRow"
-            android:text="@string/row_wallpaper_bing" />
-
-        <TextView
-            android:id="@+id/row_picsum"
-            style="@style/SettingsRow"
-            android:text="@string/row_wallpaper_picsum" />
-    </LinearLayout>
-</ScrollView>
+    <TextView
+        android:id="@+id/row_source"
+        style="@style/SettingsRow" />
+</LinearLayout>

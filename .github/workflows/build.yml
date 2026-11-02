@@ -28,7 +28,6 @@ jobs:
       - name: Build release APK
         env:
           PIXABAY_KEY: ${{ secrets.PIXABAY_KEY }}
-          UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
         run: gradle assembleRelease --no-daemon
 
       - name: Rename APK

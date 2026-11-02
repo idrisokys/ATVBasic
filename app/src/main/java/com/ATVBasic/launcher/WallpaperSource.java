@@ -21,28 +21,22 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * Online wallpaper sources: Wallhaven, Unsplash, Pixabay, Bing (and Picsum).
+ * Online wallpaper sources: Wallhaven, Pixabay, Bing (and Picsum).
  *
- * Every source has two modes: RANDOM and POPULAR ("en sevilen"):
- *  - Wallhaven: sorting=random / sorting=favorites (no key needed).
- *  - Pixabay:   order=latest / order=popular (free API key required).
- *  - Unsplash:  /photos/random / /photos?order_by=popular with an API key; without a key a
- *               curated list of well-known photos is used for both modes.
- *  - Bing:      last 8 daily photos / today's featured photo (Bing has no like counter).
+ *  - Wallhaven: most-favorited (sorting=favorites) or random, no key needed.
+ *  - Pixabay:   order=popular or latest, API key from BuildConfig.PIXABAY_KEY.
+ *  - Bing:      last 8 daily photos / today's featured photo.
  *
- * Listings are cached in small in-memory pools (20 min) so a 30 s rotation neither repeats a
- * picture nor exhausts API rate limits (Unsplash demo keys allow 50 requests/hour).
+ * Listings are cached in small in-memory pools (20 min) so a 30 s rotation never repeats a
+ * picture and stays far below the APIs' rate limits.
  */
 final class WallpaperSource {
 
     /** Values double as the "auto_source" preference (0 = off / static). */
     static final int PICSUM = 1;
-    static final int UNSPLASH = 2;
     static final int WALLHAVEN = 3;
     static final int PIXABAY = 4;
     static final int BING = 5;
-    /** Wallhaven + Unsplash + Pixabay, most-liked pictures, taken in turn. */
-    static final int MIX = 6;
 
     /** Modes for every source except Picsum. */
     static final int RANDOM = 0;
@@ -56,17 +50,6 @@ final class WallpaperSource {
     private static final long POOL_TTL_MS = 20 * 60_000L;
     private static final long MAX_JSON_BYTES = 2L * 1024 * 1024;
     private static final Random RND = new Random();
-
-    private static final String[] UNSPLASH_IDS = {
-            "1506744038136-46273834b3fb", "1469474968028-56623f02e42e",
-            "1441974231531-c6227db76b6e", "1470071459604-3b5ec3a7fe05",
-            "1501785888041-af3ef285b470", "1464822759023-fed622ff2c3b",
-            "1506905925346-21bda4d32df4", "1472214103451-9374bd1c798e",
-            "1418065460487-3e41a6c84dc5", "1519681393784-d120267933ba",
-            "1476514525535-07fb3b4ae5f1", "1433086966358-54859d0ed716",
-            "1507525428034-b723cf961d3e", "1465146344425-f00d5f5c8f07",
-            "1511497584788-876760111969", "1494548162494-384bba4ab999"
-    };
 
     private interface Loader {
         List<String> load() throws Exception;
@@ -88,35 +71,21 @@ final class WallpaperSource {
 
     // ------------------------------------------------------------------ API keys
 
-    /** Keys are baked in at build time (PIXABAY_KEY / UNSPLASH_KEY); either may be empty. */
+    /** Baked in at build time (PIXABAY_KEY); may be empty. */
     static String apiKey(Context c, int source) {
-        return source == PIXABAY ? BuildConfig.PIXABAY_KEY : BuildConfig.UNSPLASH_KEY;
+        return BuildConfig.PIXABAY_KEY;
+    }
+
+    /** Pixabay cannot be used without a key. */
+    static boolean missingKey(Context c, int source) {
+        return source == PIXABAY && apiKey(c, source).isEmpty();
     }
 
     // ------------------------------------------------------------------ public entry
 
     /** Blocking. Downloads a picture from {@code source} and installs it as the wallpaper. */
     static boolean fetchAndSet(Context ctx, int source, int mode) {
-        if (source == MIX) return fetchMix(ctx);
         return fetchOne(ctx, source, mode);
-    }
-
-    private static int mixTurn;
-
-    /** One picture from the next source in turn; if it fails the following source is tried. */
-    private static boolean fetchMix(Context ctx) {
-        List<Integer> order = new ArrayList<>();
-        order.add(WALLHAVEN);
-        order.add(UNSPLASH);
-        if (!apiKey(ctx, PIXABAY).isEmpty()) order.add(PIXABAY); // Pixabay needs a key
-        int start;
-        synchronized (WallpaperSource.class) {
-            start = mixTurn++ % order.size();
-        }
-        for (int i = 0; i < order.size(); i++) {
-            if (fetchOne(ctx, order.get((start + i) % order.size()), POPULAR)) return true;
-        }
-        return false;
     }
 
     private static boolean fetchOne(Context ctx, int source, int mode) {
@@ -146,8 +115,6 @@ final class WallpaperSource {
     private static String nextUrl(final Context ctx, final int source, final int mode,
                                   final int w, final int h) throws Exception {
         switch (source) {
-            case UNSPLASH:
-                return pop(source + ":" + mode, () -> unsplash(ctx, mode, w, h));
             case WALLHAVEN:
                 return pop(source + ":" + mode, () -> wallhaven(mode));
             case PIXABAY:
@@ -206,33 +173,6 @@ final class WallpaperSource {
             String u = o.optString("fullHDURL"); // only present for approved API accounts
             if (u.isEmpty()) u = o.optString("largeImageURL");
             if (!u.isEmpty()) list.add(u);
-        }
-        return list;
-    }
-
-    private static List<String> unsplash(Context ctx, int mode, int w, int h) {
-        String size = "w=" + w + "&h=" + h + "&fit=crop&q=85&fm=jpg";
-        List<String> list = new ArrayList<>();
-        String key = apiKey(ctx, UNSPLASH);
-        if (!key.isEmpty()) {
-            try {
-                String url = mode == POPULAR
-                        ? "https://api.unsplash.com/photos?order_by=popular&per_page=30&page="
-                                + (1 + RND.nextInt(5))
-                        : "https://api.unsplash.com/photos/random?count=30&orientation=landscape";
-                JSONArray a = new JSONArray(getText(url, "Client-ID " + key));
-                for (int i = 0; i < a.length(); i++) {
-                    String raw = a.getJSONObject(i).getJSONObject("urls").optString("raw");
-                    if (!raw.isEmpty()) list.add(raw + (raw.contains("?") ? "&" : "?") + size);
-                }
-            } catch (Exception ignored) {
-                // no key / rate limit: use the curated list below
-            }
-        }
-        if (list.isEmpty()) {
-            for (String id : UNSPLASH_IDS) {
-                list.add("https://images.unsplash.com/photo-" + id + "?" + size);
-            }
         }
         return list;
     }

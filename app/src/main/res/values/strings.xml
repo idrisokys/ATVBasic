@@ -13,26 +13,16 @@
     <string name="toast_added_dock">Dock\'a eklendi</string>
     <string name="toast_unavailable">Açılamadı</string>
 
-    <string name="row_wallpaper_file">Dosyadan duvar kağıdı ayarla (sabit)</string>
-    <string name="row_wallpaper_online">Wallhaven · Unsplash · Pixabay (en sevilenler)</string>
-    <string name="row_wallpaper_bing">Bing duvar kağıdı</string>
-    <string name="row_wallpaper_picsum">Picsum duvar kağıdı</string>
     <string name="row_system_settings">Sistem ayarları</string>
     <string name="src_picsum">Picsum</string>
-    <string name="src_unsplash">Unsplash</string>
     <string name="src_wallhaven">Wallhaven</string>
     <string name="src_pixabay">Pixabay</string>
     <string name="src_bing">Bing</string>
-    <string name="mode_random">Rastgele</string>
-    <string name="mode_popular">En sevilen</string>
-    <string name="mode_popular_bing">En sevilen (günün resmi)</string>
-    <string name="source_dialog_title">%1$s duvar kağıdı</string>
-    <string name="picsum_random">Rastgele</string>
-    <string name="picsum_grayscale">Rastgele (siyah-beyaz)</string>
-    <string name="picsum_blur">Rastgele (bulanık)</string>
     <string name="toast_auto_on">Her 30 saniyede bir değişecek</string>
     <string name="toast_working">Çalışıyor…</string>
-    <string name="toast_wallpaper_set">Duvar kağıdı ayarlandı</string>
     <string name="toast_wallpaper_failed">Duvar kağıdı alınamadı</string>
-    <string name="toast_no_picker">Dosya seçici bulunamadı</string>
+    <string name="row_source">Duvar kağıdı kaynağı: %1$s</string>
+    <string name="source_none">Seçilmedi</string>
+    <string name="source_dialog_title">Duvar kağıdı kaynağı</string>
+    <string name="toast_key_missing">Pixabay için API anahtarı gerekli (derlemeye PIXABAY_KEY ekle)</string>
 </resources>
