@@ -10,6 +10,7 @@
     <style name="Theme.ATVBasic.Panel" parent="@android:style/Theme.DeviceDefault.Dialog.NoActionBar">
         <item name="android:windowBackground">@drawable/panel_bg</item>
         <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimAmount">0.25</item>
     </style>
 
     <style name="TopButton">
@@ -28,6 +29,7 @@
 
     <style name="SettingsRow" parent="TopButton">
         <item name="android:layout_width">match_parent</item>
+        <item name="android:background">@drawable/settings_row_bg</item>
         <item name="android:layout_marginTop">8dp</item>
         <item name="android:paddingTop">12dp</item>
         <item name="android:paddingBottom">12dp</item>
