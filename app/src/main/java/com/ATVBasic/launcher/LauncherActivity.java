@@ -62,6 +62,7 @@ public final class LauncherActivity extends Activity {
     private boolean resumed;
     private boolean rotating;
     private int autoSource;
+    private int autoMode;
     private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             ui.removeCallbacks(reload); // coalesce bursts of install/remove events
@@ -168,8 +169,9 @@ public final class LauncherActivity extends Activity {
         long stamp = WallpaperStore.stamp(this);
         if (stamp != shownStamp) loadWallpaper(stamp);
         resumed = true;
-        autoSource = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE)
-                .getInt(SettingsActivity.KEY_AUTO, 0); // only Settings changes it
+        SharedPreferences sp = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE);
+        autoSource = sp.getInt(SettingsActivity.KEY_AUTO, 0); // 0 = static (file); only Settings changes it
+        autoMode = sp.getInt(SettingsActivity.KEY_MODE, 0);
         scheduleRotate();
         showUi();
     }
@@ -348,13 +350,14 @@ public final class LauncherActivity extends Activity {
     /** Auto-rotation: downloads a new wallpaper every 30 s while the home screen is visible. */
     private void rotateWallpaper() {
         final int src = autoSource;
+        final int mode = autoMode;
         if (src == 0 || !resumed || rotating) return;
         rotating = true;
         final Context app = getApplicationContext();
         Thread t = new Thread(() -> {
             boolean ok = false;
             try {
-                ok = WallpaperSource.fetchAndSet(app, src, WallpaperSource.PLAIN);
+                ok = WallpaperSource.fetchAndSet(app, src, mode);
             } catch (RuntimeException ignored) {
                 // try again next round
             }

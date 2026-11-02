@@ -1,40 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:minWidth="440dp"
-    android:orientation="vertical"
-    android:padding="24dp">
+    android:scrollbars="none">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="8dp"
-        android:text="@string/settings"
-        android:textColor="@color/text"
-        android:textSize="24sp" />
+        android:orientation="vertical"
+        android:padding="24dp">
 
-    <TextView
-        android:id="@+id/row_file"
-        style="@style/SettingsRow"
-        android:text="@string/row_wallpaper_file" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingBottom="8dp"
+            android:text="@string/settings"
+            android:textColor="@color/text"
+            android:textSize="24sp" />
 
-    <TextView
-        android:id="@+id/row_picsum"
-        style="@style/SettingsRow"
-        android:text="@string/row_wallpaper_picsum" />
+        <TextView
+            android:id="@+id/row_file"
+            style="@style/SettingsRow"
+            android:text="@string/row_wallpaper_file" />
 
-    <TextView
-        android:id="@+id/row_unsplash"
-        style="@style/SettingsRow"
-        android:text="@string/row_wallpaper_unsplash" />
+        <TextView
+            android:id="@+id/row_wallhaven"
+            style="@style/SettingsRow"
+            android:text="@string/row_wallpaper_wallhaven" />
 
-    <TextView
-        android:id="@+id/row_auto"
-        style="@style/SettingsRow" />
+        <TextView
+            android:id="@+id/row_unsplash"
+            style="@style/SettingsRow"
+            android:text="@string/row_wallpaper_unsplash" />
 
-    <TextView
-        android:id="@+id/row_system"
-        style="@style/SettingsRow"
-        android:text="@string/row_system_settings" />
-</LinearLayout>
+        <TextView
+            android:id="@+id/row_pixabay"
+            style="@style/SettingsRow"
+            android:text="@string/row_wallpaper_pixabay" />
+
+        <TextView
+            android:id="@+id/row_bing"
+            style="@style/SettingsRow"
+            android:text="@string/row_wallpaper_bing" />
+
+        <TextView
+            android:id="@+id/row_picsum"
+            style="@style/SettingsRow"
+            android:text="@string/row_wallpaper_picsum" />
+
+        <TextView
+            android:id="@+id/row_auto"
+            style="@style/SettingsRow" />
+
+        <TextView
+            android:id="@+id/row_keys"
+            style="@style/SettingsRow"
+            android:text="@string/row_keys" />
+
+        <TextView
+            android:id="@+id/row_system"
+            style="@style/SettingsRow"
+            android:text="@string/row_system_settings" />
+    </LinearLayout>
+</ScrollView>

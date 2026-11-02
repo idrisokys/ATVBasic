@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Picsum wallpaper download. -->
+    <!-- Online wallpaper download (Wallhaven, Unsplash, Pixabay, Bing, Picsum). -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Needed to open the system uninstall dialog (Android 9+). -->

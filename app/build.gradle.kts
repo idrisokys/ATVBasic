@@ -2,6 +2,11 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+// API keys: -PPIXABAY_KEY=... / gradle.properties / environment variable (GitHub secret).
+fun apiKey(name: String): String =
+    (providers.gradleProperty(name).orNull ?: System.getenv(name) ?: "")
+        .replace(Regex("[^A-Za-z0-9_-]"), "")
+
 android {
     namespace = "com.ATVBasic.launcher"
     compileSdk = 36
@@ -10,8 +15,15 @@ android {
         applicationId = "com.ATVBasic.launcher"
         minSdk = 26
         targetSdk = 36
-        versionCode = 31
-        versionName = "3.0.0"
+        versionCode = 32
+        versionName = "3.1.0"
+
+        buildConfigField("String", "PIXABAY_KEY", "\"${apiKey("PIXABAY_KEY")}\"")
+        buildConfigField("String", "UNSPLASH_KEY", "\"${apiKey("UNSPLASH_KEY")}\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {
