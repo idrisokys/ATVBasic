@@ -6,39 +6,9 @@
         <item name="android:windowAnimationStyle">@null</item>
     </style>
 
-    <!-- Floating window used by the settings screen. -->
-    <style name="Theme.ATVBasic.Panel" parent="@android:style/Theme.DeviceDefault.Dialog.NoActionBar">
-        <item name="android:windowBackground">@drawable/panel_bg</item>
-        <item name="android:windowAnimationStyle">@null</item>
-        <item name="android:backgroundDimAmount">0.25</item>
-    </style>
-
     <!-- Translucent list/alert dialogs (dock pickers, source modes). -->
     <style name="Theme.ATVBasic.Dialog" parent="@android:style/Theme.DeviceDefault.Dialog.Alert">
         <item name="android:windowBackground">@drawable/panel_bg</item>
         <item name="android:backgroundDimAmount">0.2</item>
-    </style>
-
-    <style name="TopButton">
-        <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">wrap_content</item>
-        <item name="android:background">@drawable/button_bg</item>
-        <item name="android:clickable">true</item>
-        <item name="android:focusable">true</item>
-        <item name="android:paddingStart">20dp</item>
-        <item name="android:paddingEnd">20dp</item>
-        <item name="android:paddingTop">8dp</item>
-        <item name="android:paddingBottom">8dp</item>
-        <item name="android:textColor">@color/text</item>
-        <item name="android:textSize">16sp</item>
-    </style>
-
-    <style name="SettingsRow" parent="TopButton">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:background">@drawable/settings_row_bg</item>
-        <item name="android:layout_marginTop">8dp</item>
-        <item name="android:paddingTop">12dp</item>
-        <item name="android:paddingBottom">12dp</item>
-        <item name="android:textSize">18sp</item>
     </style>
 </resources>

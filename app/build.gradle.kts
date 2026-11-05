@@ -7,11 +7,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.ATVBasic.launcher"
+        applicationId = "io.github.idrisokys.atvbasic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 32
-        versionName = "3.1.0"
+        versionCode = 33
+        versionName = "3.2.0"
     }
 
     compileOptions {

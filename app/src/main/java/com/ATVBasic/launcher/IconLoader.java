@@ -53,7 +53,7 @@ final class IconLoader {
             ui.post(() -> {
                 pending.remove(e.pkg);
                 if (gen != generation) return; // launcher was hidden meanwhile
-                cache.put(e.pkg, b);
+                if (b != null) cache.put(e.pkg, b);
                 onLoaded.run();
             });
         });
@@ -66,9 +66,10 @@ final class IconLoader {
     }
 
     private Bitmap render(AppEntry e) {
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(bmp);
+        Bitmap bmp = null;
         try {
+            bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            Canvas c = new Canvas(bmp);
             Drawable d = e.info.loadBanner(pm);
             if (d != null) {
                 d.setBounds(0, 0, w, h);

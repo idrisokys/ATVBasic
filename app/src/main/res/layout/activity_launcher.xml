@@ -110,4 +110,23 @@
             android:orientation="horizontal"
             android:paddingBottom="20dp" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/slideshow_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="28dp"
+        android:background="@drawable/label_bg"
+        android:paddingStart="20dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="8dp"
+        android:shadowColor="#CC000000"
+        android:shadowDx="0"
+        android:shadowDy="1"
+        android:shadowRadius="4"
+        android:textColor="@color/text"
+        android:textSize="18sp"
+        android:visibility="gone" />
 </FrameLayout>

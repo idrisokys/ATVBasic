@@ -51,20 +51,22 @@ public final class LauncherActivity extends Activity {
     private static final int DOCK_SLOTS = 6;
     private static final long RELOAD_DELAY_MS = 500;
     private static final long ROTATE_INTERVAL_MS = 60_000;
-    private static final long DAILY_CHECK_MS = 60 * 60_000L;
-    private static final long DAILY_STALE_MS = 12 * 60 * 60_000L;
     private static final long IDLE_HIDE_MS = 20_000;
+    private static final long LABEL_SHOW_MS = 2_500;
+    private static final long RETRY_MS = 30_000;
+    private static final String KEY_SLIDESHOW = "slideshow";
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final Runnable reload = this::scan;
     private final Runnable rotate = this::rotateWallpaper;
     private final Runnable hideUi = this::hideUi;
+    private final Runnable hideLabel = this::hideLabel;
     private View content;
     private boolean uiHidden;
     private boolean resumed;
     private boolean rotating;
-    private int autoSource;
-    private int autoMode;
+    private boolean slideshow;
+    private boolean wallpaperFailed;
     private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             ui.removeCallbacks(reload); // coalesce bursts of install/remove events
@@ -86,6 +88,7 @@ public final class LauncherActivity extends Activity {
     private SharedPreferences prefs;
     private ImageView wallpaper;
     private TextView dateView;
+    private TextView slideshowLabel;
     private GridView grid;
     private LinearLayout dock;
     private AppAdapter adapter;
@@ -128,6 +131,7 @@ public final class LauncherActivity extends Activity {
         content = findViewById(R.id.content);
         wallpaper = findViewById(R.id.wallpaper);
         dateView = findViewById(R.id.date);
+        slideshowLabel = findViewById(R.id.slideshow_label);
         grid = findViewById(R.id.grid);
         dock = findViewById(R.id.dock);
         adapter = new AppAdapter();
@@ -140,9 +144,15 @@ public final class LauncherActivity extends Activity {
             showGridMenu(adapter.getItem(pos));
             return true;
         });
-        findViewById(R.id.settings).setOnClickListener(
-                v -> startActivity(new Intent(this, SettingsActivity.class)));
-        findViewById(R.id.next_wallpaper).setOnClickListener(v -> nextWallpaper());
+        // Settings icon: straight to the system settings.
+        findViewById(R.id.settings).setOnClickListener(v -> open(new Intent(Settings.ACTION_SETTINGS)));
+        // Short press: next picture. Long press: start / stop the 60 s slideshow.
+        View next = findViewById(R.id.next_wallpaper);
+        next.setOnClickListener(v -> nextWallpaper());
+        next.setOnLongClickListener(v -> {
+            toggleSlideshow();
+            return true;
+        });
 
         IntentFilter pkg = new IntentFilter();
         pkg.addAction(Intent.ACTION_PACKAGE_ADDED);
@@ -189,9 +199,7 @@ public final class LauncherActivity extends Activity {
         long stamp = WallpaperStore.stamp(this);
         if (stamp != shownStamp) loadWallpaper(stamp);
         resumed = true;
-        SharedPreferences sp = getSharedPreferences(SettingsActivity.PREFS, MODE_PRIVATE);
-        autoSource = sp.getInt(SettingsActivity.KEY_AUTO, SettingsActivity.DEFAULT_SOURCE); // 0 = off; first launch = Wallhaven
-        autoMode = sp.getInt(SettingsActivity.KEY_MODE, SettingsActivity.DEFAULT_MODE);
+        slideshow = prefs.getBoolean(KEY_SLIDESHOW, false);
         scheduleRotate();
         showUi();
     }
@@ -201,6 +209,9 @@ public final class LauncherActivity extends Activity {
         resumed = false;
         ui.removeCallbacks(rotate);
         ui.removeCallbacks(hideUi);
+        ui.removeCallbacks(hideLabel);
+        slideshowLabel.animate().cancel();
+        slideshowLabel.setVisibility(View.GONE);
         super.onPause();
     }
 
@@ -362,60 +373,71 @@ public final class LauncherActivity extends Activity {
         resetIdle();
     }
 
+    /** Arms the slideshow timer; also fetches the very first picture when there is none yet. */
     private void scheduleRotate() {
         ui.removeCallbacks(rotate);
-        if (autoSource == 0 || !resumed || rotating) return;
-        if (autoSource == WallpaperSource.BING_DAILY) {
-            // Single picture: only refresh it once it is older than half a day.
-            ui.postDelayed(rotate, dailyStale() ? 2_000 : DAILY_CHECK_MS);
-        } else {
-            // No picture yet (first launch): fetch the first one right away.
-            ui.postDelayed(rotate, WallpaperStore.stamp(this) == 0 ? 2_000 : ROTATE_INTERVAL_MS);
+        if (!resumed || rotating) return;
+        if (WallpaperStore.stamp(this) == 0) {
+            // No picture yet (first launch): fetch one, retry slowly when offline.
+            ui.postDelayed(rotate, wallpaperFailed ? RETRY_MS : 2_000);
+        } else if (slideshow) {
+            ui.postDelayed(rotate, ROTATE_INTERVAL_MS);
         }
     }
 
-    private boolean dailyStale() {
-        long stamp = WallpaperStore.stamp(this);
-        return stamp == 0 || System.currentTimeMillis() - stamp > DAILY_STALE_MS;
-    }
-
-    /** Auto-rotation: downloads a new wallpaper every 60 s while the home screen is visible. */
+    /** Timer tick: downloads a new Wallhaven nature picture (slideshow or first picture). */
     private void rotateWallpaper() {
-        if (autoSource == 0 || !resumed || rotating) return;
-        if (autoSource == WallpaperSource.BING_DAILY && !dailyStale()) {
-            scheduleRotate();
-            return;
-        }
-        fetchWallpaper(autoSource, autoMode, false);
+        if (!resumed || rotating) return;
+        if (!slideshow && WallpaperStore.stamp(this) != 0) return;
+        fetchWallpaper(false);
     }
 
-    /**
-     * "Next" button: fetches the next picture right away from the selected source. When rotation is
-     * off or Bing daily is selected, Wallhaven (nature) is used; the saved settings stay unchanged.
-     */
+    /** Short press on the picture button: next picture right away. */
     private void nextWallpaper() {
         if (rotating) return;
-        boolean fixed = autoSource == 0 || autoSource == WallpaperSource.BING_DAILY;
-        int src = fixed ? WallpaperSource.WALLHAVEN : autoSource;
-        int mode = fixed ? WallpaperSource.POPULAR : autoMode;
-        fetchWallpaper(src, mode, true);
+        fetchWallpaper(true);
+    }
+
+    /** Long press on the picture button: starts the 60 s slideshow, or stops it when running. */
+    private void toggleSlideshow() {
+        slideshow = !slideshow;
+        prefs.edit().putBoolean(KEY_SLIDESHOW, slideshow).apply();
+        showLabel(slideshow ? R.string.label_slideshow_on : R.string.label_slideshow_off);
+        scheduleRotate();
+    }
+
+    private void showLabel(int textRes) {
+        ui.removeCallbacks(hideLabel);
+        slideshowLabel.animate().cancel();
+        slideshowLabel.setText(textRes);
+        slideshowLabel.setAlpha(1f);
+        slideshowLabel.setVisibility(View.VISIBLE);
+        ui.postDelayed(hideLabel, LABEL_SHOW_MS);
+    }
+
+    private void hideLabel() {
+        slideshowLabel.animate().alpha(0f).setDuration(400)
+                .withEndAction(() -> {
+                    if (slideshowLabel.getAlpha() == 0f) slideshowLabel.setVisibility(View.GONE);
+                }).start();
     }
 
     /** Downloads one picture on a low-priority thread, shows it, then re-arms the rotation timer. */
-    private void fetchWallpaper(final int src, final int mode, final boolean manual) {
+    private void fetchWallpaper(final boolean manual) {
         rotating = true;
         ui.removeCallbacks(rotate);
         final Context app = getApplicationContext();
         Thread t = new Thread(() -> {
             boolean ok = false;
             try {
-                ok = WallpaperSource.fetchAndSet(app, src, mode);
+                ok = WallpaperSource.fetchAndSet(app);
             } catch (RuntimeException ignored) {
                 // try again next round
             }
             final boolean result = ok;
             ui.post(() -> {
                 rotating = false;
+                wallpaperFailed = !result;
                 if (isDestroyed()) return;
                 if (result && resumed) loadWallpaper(WallpaperStore.stamp(this));
                 else if (!result && manual) {

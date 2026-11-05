@@ -58,13 +58,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-
-        <activity
-            android:name=".SettingsActivity"
-            android:configChanges="keyboard|keyboardHidden|navigation|screenSize|smallestScreenSize|screenLayout|uiMode|density|fontScale|locale|layoutDirection"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:theme="@style/Theme.ATVBasic.Panel" />
     </application>
 
 </manifest>
