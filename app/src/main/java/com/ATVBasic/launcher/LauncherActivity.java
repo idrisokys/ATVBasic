@@ -1,5 +1,6 @@
 package com.ATVBasic.launcher;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -55,6 +56,7 @@ public final class LauncherActivity extends Activity {
     private static final long LABEL_SHOW_MS = 2_500;
     private static final long RETRY_MS = 30_000;
     private static final String KEY_SLIDESHOW = "slideshow";
+    private static final int REQ_STORAGE = 2;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final Runnable reload = this::scan;
@@ -145,7 +147,13 @@ public final class LauncherActivity extends Activity {
             return true;
         });
         // Settings icon: straight to the system settings.
-        findViewById(R.id.settings).setOnClickListener(v -> open(new Intent(Settings.ACTION_SETTINGS)));
+        // Long press: saves the current picture to the Downloads folder.
+        View settingsBtn = findViewById(R.id.settings);
+        settingsBtn.setOnClickListener(v -> open(new Intent(Settings.ACTION_SETTINGS)));
+        settingsBtn.setOnLongClickListener(v -> {
+            saveWallpaper();
+            return true;
+        });
         // Short press: next picture. Long press: start / stop the 60 s slideshow.
         View next = findViewById(R.id.next_wallpaper);
         next.setOnClickListener(v -> nextWallpaper());
@@ -404,6 +412,30 @@ public final class LauncherActivity extends Activity {
         prefs.edit().putBoolean(KEY_SLIDESHOW, slideshow).apply();
         showLabel(slideshow ? R.string.label_slideshow_on : R.string.label_slideshow_off);
         scheduleRotate();
+    }
+
+    /** Saves the current wallpaper to Downloads (Android 8/9 asks for storage permission once). */
+    private void saveWallpaper() {
+        if (Build.VERSION.SDK_INT < 29
+                && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_STORAGE);
+            return;
+        }
+        final Context app = getApplicationContext();
+        io.execute(() -> {
+            final boolean ok = WallpaperStore.saveToDownloads(app);
+            ui.post(() -> Toast.makeText(app,
+                    ok ? R.string.toast_saved : R.string.toast_save_failed, Toast.LENGTH_SHORT).show());
+        });
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        super.onRequestPermissionsResult(code, perms, results);
+        if (code == REQ_STORAGE && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+            saveWallpaper();
+        }
     }
 
     private void showLabel(int textRes) {

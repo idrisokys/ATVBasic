@@ -1,18 +1,29 @@
 package com.ATVBasic.launcher;
 
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.media.MediaScannerConnection;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.util.DisplayMetrics;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 /** Keeps one screen-sized JPEG in app storage; nothing is held in memory while hidden. */
 final class WallpaperStore {
@@ -82,6 +93,61 @@ final class WallpaperStore {
         } finally {
             src.delete();
         }
+    }
+
+    /**
+     * Blocking. Copies the current wallpaper (the screen-sized JPEG) into the public Downloads folder.
+     * Android 10+ needs no permission (MediaStore); Android 8/9 needs WRITE_EXTERNAL_STORAGE.
+     */
+    static boolean saveToDownloads(Context c) {
+        File src = file(c);
+        if (!src.exists()) return false;
+        String name = "wallpaper_"
+                + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".jpg";
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                ContentResolver r = c.getContentResolver();
+                ContentValues v = new ContentValues();
+                v.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+                v.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg");
+                v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                v.put(MediaStore.MediaColumns.IS_PENDING, 1);
+                Uri uri = r.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                if (uri == null) return false;
+                try (OutputStream os = r.openOutputStream(uri);
+                     InputStream in = new FileInputStream(src)) {
+                    if (os == null) throw new IOException("no stream");
+                    pipe(in, os);
+                } catch (IOException e) {
+                    r.delete(uri, null, null);
+                    return false;
+                }
+                v.clear();
+                v.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                r.update(uri, v, null, null);
+                return true;
+            }
+            File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            if (!dir.isDirectory() && !dir.mkdirs()) return false;
+            File dst = new File(dir, name);
+            try (OutputStream os = new FileOutputStream(dst);
+                 InputStream in = new FileInputStream(src)) {
+                pipe(in, os);
+            } catch (IOException e) {
+                dst.delete();
+                return false;
+            }
+            MediaScannerConnection.scanFile(c, new String[]{dst.getPath()}, null, null);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    private static void pipe(InputStream in, OutputStream os) throws IOException {
+        byte[] buf = new byte[16 * 1024];
+        int n;
+        while ((n = in.read(buf)) > 0) os.write(buf, 0, n);
     }
 
     /** Copies a stream to a file, refusing inputs larger than 40 MB. */

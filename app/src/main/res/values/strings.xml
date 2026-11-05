@@ -20,4 +20,6 @@
     <string name="toast_wallpaper_failed">Duvar kağıdı alınamadı</string>
     <string name="label_slideshow_on">Slayt gösterisi başladı (60 sn)</string>
     <string name="label_slideshow_off">Slayt gösterisi durduruldu</string>
+    <string name="toast_saved">Resim İndirilenler klasörüne kaydedildi</string>
+    <string name="toast_save_failed">Resim kaydedilemedi</string>
 </resources>
