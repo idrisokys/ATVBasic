@@ -22,4 +22,12 @@
     <string name="label_slideshow_off">Slayt gösterisi durduruldu</string>
     <string name="toast_saved">Resim İndirilenler klasörüne kaydedildi</string>
     <string name="toast_save_failed">Resim kaydedilemedi</string>
+
+    <string name="share_label">Duvar kağıdı yap</string>
+    <string name="share_working">Duvar kağıdı ayarlanıyor…</string>
+    <string name="share_no_image">Görsel bulunamadı</string>
+    <string name="share_failed">Duvar kağıdı ayarlanamadı</string>
+    <string name="share_done_all">Launcher, ana ekran ve kilit ekranı güncellendi</string>
+    <string name="share_done_system">Launcher ve ana ekran güncellendi (bu cihazda kilit ekranı yok)</string>
+    <string name="share_done_launcher">Launcher duvar kağıdı güncellendi</string>
 </resources>

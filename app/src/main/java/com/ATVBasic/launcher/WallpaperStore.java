@@ -6,6 +6,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.media.MediaScannerConnection;
@@ -56,6 +57,14 @@ final class WallpaperStore {
 
     /** Scales/crops {@code src} to the screen size, saves it as the wallpaper, deletes {@code src}. */
     static boolean importFile(Context c, File src) throws IOException {
+        return importFile(c, src, false);
+    }
+
+    /**
+     * Like {@link #importFile(Context, File)}; with {@code fit} the whole picture is kept
+     * (no cropping) and centred on black, otherwise it fills the screen and is cropped.
+     */
+    static boolean importFile(Context c, File src, boolean fit) throws IOException {
         try {
             DisplayMetrics dm = c.getResources().getDisplayMetrics();
             // 1080p is plenty for a wallpaper and keeps memory low on 4K TVs (the view scales it up).
@@ -76,11 +85,15 @@ final class WallpaperStore {
             if (decoded == null) return false;
 
             Bitmap out = Bitmap.createBitmap(tw, th, Bitmap.Config.RGB_565);
-            float s = Math.max(tw / (float) decoded.getWidth(), th / (float) decoded.getHeight());
+            float sx = tw / (float) decoded.getWidth();
+            float sy = th / (float) decoded.getHeight();
+            float s = fit ? Math.min(sx, sy) : Math.max(sx, sy);
             Matrix m = new Matrix();
             m.postScale(s, s);
             m.postTranslate((tw - decoded.getWidth() * s) / 2f, (th - decoded.getHeight() * s) / 2f);
-            new Canvas(out).drawBitmap(decoded, m, new Paint(Paint.FILTER_BITMAP_FLAG));
+            Canvas canvas = new Canvas(out);
+            if (fit) canvas.drawColor(Color.BLACK);
+            canvas.drawBitmap(decoded, m, new Paint(Paint.FILTER_BITMAP_FLAG));
             decoded.recycle();
 
             File tmpOut = new File(c.getFilesDir(), "wallpaper.tmp");

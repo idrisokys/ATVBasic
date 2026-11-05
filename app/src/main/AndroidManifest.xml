@@ -7,6 +7,9 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- Share menu "Duvar kağıdı yap": sets the system home / lock screen wallpaper. -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+
     <!-- Needed to open the system uninstall dialog (Android 9+). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
@@ -59,6 +62,25 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
                 <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <!-- Paylaş menüsünde "Duvar kağıdı yap" (arayüzsüz) -->
+        <activity
+            android:name=".SetWallpaperActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/share_label"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.ATTACH_DATA" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
     </application>
