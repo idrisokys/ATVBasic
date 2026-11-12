@@ -5,9 +5,17 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
@@ -17,16 +25,33 @@ jobs:
           java-version: 17
 
       # The runner already ships the Android SDK; just accept licenses so
-      # Gradle can auto-download any missing platform/build-tools (API 36).
+      # Gradle can auto-download any missing platform/build-tools (API 37).
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
+      # Pinned to the Gradle version AGP 9.5 requires, so builds stay reproducible.
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: current
+          gradle-version: "9.6.0"
+
+      # Optional: add these repository secrets to sign every build with the same key,
+      # so new APKs install over the old ones without uninstalling first.
+      #   KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+      - name: Prepare release signing key (optional)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "ATV_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          fi
 
       - name: Build release APK
-        run: gradle assembleRelease --no-daemon
+        env:
+          ATV_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          ATV_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          ATV_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
         run: |
