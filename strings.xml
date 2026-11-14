@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ATV Basic</string>
+    <string name="settings">Ayarlar</string>
+    <string name="next_wallpaper">Sonraki resim</string>
+
+    <string name="add_app">+ Uygulama ekle</string>
+    <string name="menu_add_dock">Dock\'a ekle</string>
+    <string name="menu_change">Uygulamayı değiştir</string>
+    <string name="menu_remove_dock">Dock\'tan kaldır</string>
+    <string name="menu_app_info">Uygulama bilgisi</string>
+    <string name="menu_uninstall">Kaldır</string>
+    <string name="replace_which">Hangi uygulama değiştirilsin?</string>
+    <string name="toast_added_dock">Dock\'a eklendi</string>
+    <string name="toast_unavailable">Açılamadı</string>
+    <string name="default_home_title">Varsayılan launcher</string>
+    <string name="default_home_message">ATV Basic ana ekran olarak ayarlansın mı?</string>
+    <string name="default_home_yes">Evet</string>
+    <string name="default_home_no">Şimdi değil</string>
+    <string name="toast_wallpaper_failed">Duvar kağıdı alınamadı</string>
+    <string name="label_slideshow_on">Slayt gösterisi başladı (60 sn)</string>
+    <string name="label_slideshow_off">Slayt gösterisi durduruldu</string>
+    <string name="toast_saved">Resim İndirilenler klasörüne kaydedildi</string>
+    <string name="toast_save_failed">Resim kaydedilemedi</string>
+
+    <string name="share_label">Duvar kağıdı yap</string>
+    <string name="share_working">Duvar kağıdı ayarlanıyor…</string>
+    <string name="share_no_image">Görsel bulunamadı</string>
+    <string name="share_failed">Duvar kağıdı ayarlanamadı</string>
+    <string name="share_done_all">Launcher, ana ekran ve kilit ekranı güncellendi</string>
+    <string name="share_done_system">Launcher ve ana ekran güncellendi (bu cihazda kilit ekranı yok)</string>
+    <string name="share_done_launcher">Launcher duvar kağıdı güncellendi</string>
+
+    <string name="qs_share">Paylaşım</string>
+    <string name="label_share_on">Paylaşım açık</string>
+    <string name="label_share_off">Paylaşım kapalı</string>
+    <string name="toast_share_permission">Paylaşım için izin gerekli</string>
+    <string name="toast_share_failed">Paylaşım başlatılamadı</string>
+    <string name="qs_channel_run">Paylaşım</string>
+    <string name="qs_channel_recv">Alınan dosyalar</string>
+    <string name="qs_notif_waiting">Paylaşım açık, dosya bekleniyor</string>
+    <string name="qs_receiving">Alınıyor: %1$s</string>
+    <string name="qs_saved">Alındı: %1$s</string>
+    <string name="qs_partial">Aktarım yarım kaldı</string>
+    <string name="qs_error">Alma hatası</string>
+    <string name="qs_received">Dosya alındı</string>
+</resources>
