@@ -1,6 +1,6 @@
 
-
-https://github.com/user-attachments/assets/293e2a0f-897b-41d8-bb9d-e66d247ddb8c
+adb shell appops get io.github.idrisokys.atvbasic MANAGE_EXTERNAL_STORAGE
+adb shell appops get io.github.idrisokys.atvbasic MANAGE_EXTERNAL_STORAGE allow olmalı
 
 # ATV Basic
 
