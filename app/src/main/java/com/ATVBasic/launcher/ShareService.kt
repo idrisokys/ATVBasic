@@ -56,9 +56,11 @@ class ShareService : Service() {
         private const val TYPE = "_qshare._tcp."
         private const val CH_RUN = "share_run"
         private const val CH_RECV = "share_recv"
-        private const val BUF = 1 shl 20
+        // TCP soket tamponu: 5 GHz Wi-Fi için geniş pencere; sistem kendi üst sınırına kırpar.
+        private const val BUF = 4 shl 20
         private const val CH = 512 * 1024      // ağ okuma ile disk yazmayı ayıran tampon parçası
-        private const val SLOTS = 8            // 8 x 512 KB = 4 MB tampon havuzu
+        // 16 x 512 KB = 8 MB: TV flash belleğinin kısa yazma duraklamalarında (GC) ağ beklemesin. Tamponlar gerektikçe ayrılır.
+        private const val SLOTS = 16
 
         private val main = Handler(Looper.getMainLooper())
 
@@ -250,7 +252,8 @@ class ShareService : Service() {
                 try {
                     sink.out.use { out ->
                         // Okuyucu ağdan okur, yazıcı iş parçacığı diske yazar: yavaş TV deposu ağı bekletmez.
-                        val free = ArrayBlockingQueue<ByteArray>(SLOTS).also { q -> repeat(SLOTS) { q.add(ByteArray(CH)) } }
+                        val free = ArrayBlockingQueue<ByteArray>(SLOTS)
+                        var made = 0
                         val full = ArrayBlockingQueue<Chunk>(SLOTS + 1)
                         val werr = AtomicBoolean(false)
                         val wr = thread(isDaemon = true, name = "share-write") {
@@ -265,7 +268,7 @@ class ShareService : Service() {
                         var last = -1
                         try {
                             while (left > 0 && !werr.get()) {
-                                val b = free.poll(30, TimeUnit.SECONDS) ?: break
+                                val b = free.poll() ?: if (made < SLOTS) { made++; ByteArray(CH) } else (free.poll(30, TimeUnit.SECONDS) ?: break)
                                 val want = minOf(CH.toLong(), left).toInt()
                                 var fill = 0
                                 while (fill < want) {

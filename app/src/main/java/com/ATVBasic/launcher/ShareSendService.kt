@@ -327,7 +327,7 @@ class ShareSendService : Service() {
             val src = open(item) ?: return false
             return src.use { input ->
                 Socket().use { s ->
-                    s.sendBufferSize = 1 shl 20
+                    s.sendBufferSize = 4 shl 20
                     s.tcpNoDelay = true
                     s.connect(InetSocketAddress(addr, port), 5_000)
                     s.soTimeout = 30_000
