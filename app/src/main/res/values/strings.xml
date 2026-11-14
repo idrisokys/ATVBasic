@@ -35,6 +35,7 @@
     <string name="label_share_on">Paylaşım açık</string>
     <string name="label_share_off">Paylaşım kapalı</string>
     <string name="toast_share_permission">Paylaşım için izin gerekli</string>
+    <string name="toast_allfiles">Dosyaları ana dizindeki Link klasörüne kaydetmek için "Tüm dosyalara erişim" iznini verin</string>
     <string name="toast_share_failed">Paylaşım başlatılamadı</string>
     <string name="qs_channel_run">Paylaşım</string>
     <string name="qs_channel_recv">Alınan dosyalar</string>

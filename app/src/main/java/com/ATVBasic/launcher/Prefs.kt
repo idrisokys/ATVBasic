@@ -8,4 +8,5 @@ internal object Prefs {
     const val SLOT_PREFIX = "slot"
     const val SHARE_ON = "share_on"
     const val SHARE_ID = "share_id"
+    const val ALL_FILES_ASKED = "all_files_asked"
 }

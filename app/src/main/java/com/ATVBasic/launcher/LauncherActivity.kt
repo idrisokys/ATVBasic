@@ -14,6 +14,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
@@ -359,7 +360,7 @@ class LauncherActivity : Activity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQ_SHARE) {
-            if (requiredSharePerms().isEmpty()) startShare() else toast(R.string.toast_share_permission)
+            if (requiredSharePerms().isEmpty()) proceedShare() else toast(R.string.toast_share_permission)
             return
         }
         if (requestCode == REQ_STORAGE && grantResults.isNotEmpty() &&
@@ -602,7 +603,39 @@ class LauncherActivity : Activity() {
         ) {
             ask.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        if (ask.isEmpty()) startShare() else requestPermissions(ask.toTypedArray(), REQ_SHARE)
+        if (ask.isEmpty()) proceedShare() else requestPermissions(ask.toTypedArray(), REQ_SHARE)
+    }
+
+    /**
+     * Android 11+: dosyaları ana dizindeki /Link klasörüne yazmak için "Tüm dosyalara erişim" gerekir.
+     * Ayar ekranı bir kez açılır; verilmezse paylaşım yine çalışır ve dosyalar İndirilenler/Link'e düşer.
+     */
+    private fun proceedShare() {
+        if (Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager() &&
+            !prefs.getBoolean(Prefs.ALL_FILES_ASKED, false)
+        ) {
+            prefs.edit().putBoolean(Prefs.ALL_FILES_ASKED, true).apply()
+            if (openAllFilesSettings()) toast(R.string.toast_allfiles)
+        }
+        startShare()
+    }
+
+    private fun openAllFilesSettings(): Boolean {
+        if (Build.VERSION.SDK_INT < 30) return false
+        val pkg = Uri.parse("package:$packageName")
+        val actions = arrayOf(
+            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+            Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION,
+        )
+        for (a in actions) {
+            try {
+                startActivity(Intent(a, pkg))
+                return true
+            } catch (e: Exception) {
+                // bu TV'de ekran yok; sıradakini dene
+            }
+        }
+        return false
     }
 
     private fun startShare() {

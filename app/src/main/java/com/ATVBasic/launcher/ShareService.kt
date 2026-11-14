@@ -41,7 +41,8 @@ import kotlin.concurrent.thread
 
 /**
  * Paylaşım. Açıkken bu cihaz ağda QuickShare cihazı olarak görünür (mDNS) ve gelen dosyaları
- * İndirilenler/Link klasörüne kaydeder. Arayüzü yoktur: ana ekrandaki paylaşım simgesi
+ * <ana dizin>/Link klasörüne kaydeder
+ * (Android 11+ için "Tüm dosyalara erişim" izni yoksa İndirilenler/Link'e düşer). Arayüzü yoktur: ana ekrandaki paylaşım simgesi
  * servisi açar / kapatır.
  */
 class ShareService : Service() {
@@ -300,10 +301,21 @@ class ShareService : Service() {
         }
     }
 
-    // ------------------------------------------------------------------ storage: Download/Link
+    // ------------------------------------------------------------------ storage: <ana dizin>/Link (yedek: Download/Link)
 
-    private fun openSink(name: String): Sink? =
-        if (Build.VERSION.SDK_INT >= 29) mediaSink(name) else legacySink(name)
+    /** Ana dizine (/storage/emulated/0/Link) doğrudan yazılabilir mi? */
+    @Suppress("DEPRECATION")
+    private fun canWriteRoot(): Boolean = when {
+        Build.VERSION.SDK_INT >= 30 -> Environment.isExternalStorageManager()
+        Build.VERSION.SDK_INT >= 29 -> false // Android 10: izin maxSdk=28 ile sınırlı, MediaStore kullanılır
+        else -> checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun openSink(name: String): Sink? {
+        if (canWriteRoot()) rootSink(name)?.let { return it }
+        // İzin yoksa / yazılamadıysa: Android 10+ İndirilenler/Link (izinsiz), eski sürümlerde vazgeç.
+        return if (Build.VERSION.SDK_INT >= 29) mediaSink(name) else null
+    }
 
     /** Android 10+: izin gerekmez; dosya İndirilenler/Link altına MediaStore ile yazılır. */
     @SuppressLint("NewApi")
@@ -333,13 +345,10 @@ class ShareService : Service() {
         )
     }
 
-    /** Android 8/9: depolama izniyle İndirilenler/Link klasörüne yazılır. */
+    /** Ana dizindeki /Link klasörüne doğrudan dosya olarak yazar (Android 8/9 depolama izni, Android 11+ tüm dosyalar izni). */
     @Suppress("DEPRECATION")
-    private fun legacySink(name: String): Sink? {
-        if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            return null
-        }
-        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Link")
+    private fun rootSink(name: String): Sink? {
+        val dir = File(Environment.getExternalStorageDirectory(), "Link")
         if (!dir.isDirectory && !dir.mkdirs()) return null
         val tmp = File(dir, "$name.${UUID.randomUUID().toString().take(8)}.part")
         val os = try { FileOutputStream(tmp) } catch (e: Exception) { return null }
