@@ -57,4 +57,7 @@
     <string name="send_partial">%1$d cihaza gönderildi, %2$d cihazda hata oldu</string>
     <string name="send_failed">Gönderilemedi</string>
     <string name="send_start_failed">Gönderim başlatılamadı</string>
+    <string name="notice_received">Dosya alındı</string>
+    <string name="notice_sent">Dosya gönderildi</string>
+    <string name="notice_send_failed">Dosya gönderilemedi</string>
 </resources>

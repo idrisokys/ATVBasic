@@ -18,7 +18,6 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
-import android.widget.Toast
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -395,15 +394,9 @@ class ShareSendService : Service() {
             try { File(cacheDir, "send").deleteRecursively() } catch (e: Exception) { }
             try { listener?.let { nsd.stopServiceDiscovery(it) } } catch (e: Exception) { }
 
-            val msg = when {
-                items.isEmpty() -> getString(R.string.send_no_files)
-                devOk == 0 && devFail == 0 -> getString(R.string.send_no_device)
-                devFail == 0 -> getString(R.string.send_done, devOk)
-                devOk == 0 -> getString(R.string.send_failed)
-                else -> getString(R.string.send_partial, devOk, devFail)
-            }
+            val msg = getString(if (items.isNotEmpty() && devOk > 0) R.string.notice_sent else R.string.notice_send_failed)
             main.post {
-                Toast.makeText(applicationContext, msg, Toast.LENGTH_LONG).show()
+                Notice.show(applicationContext, msg)
                 if (--jobs <= 0) stopSelf()
             }
         }

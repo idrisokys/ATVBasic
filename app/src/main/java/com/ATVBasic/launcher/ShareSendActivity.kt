@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
 
 /**
  * Arayüzsüz paylaşım hedefi. Dosya yöneticisinde bir ya da birden çok dosya seçilip
@@ -22,7 +21,7 @@ class ShareSendActivity : Activity() {
 
         uris = collectUris(intent)
         if (uris.isEmpty()) {
-            Toast.makeText(this, R.string.send_no_files, Toast.LENGTH_LONG).show()
+            Notice.show(this, getString(R.string.notice_send_failed))
             finish()
             return
         }
@@ -47,7 +46,7 @@ class ShareSendActivity : Activity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 go()
             } else {
-                Toast.makeText(this, R.string.toast_share_permission, Toast.LENGTH_LONG).show()
+                Notice.show(this, getString(R.string.notice_send_failed))
                 finish()
             }
         }
@@ -55,7 +54,7 @@ class ShareSendActivity : Activity() {
 
     private fun go() {
         if (!ShareSendService.start(this, uris)) {
-            Toast.makeText(this, R.string.send_start_failed, Toast.LENGTH_LONG).show()
+            Notice.show(this, getString(R.string.notice_send_failed))
         }
         finish()
     }

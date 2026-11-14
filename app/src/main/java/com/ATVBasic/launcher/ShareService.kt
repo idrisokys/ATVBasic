@@ -398,6 +398,7 @@ class ShareService : Service() {
     }
 
     private fun notifyReceived(name: String) {
+        Notice.show(this, getString(R.string.notice_received))
         try {
             val n = Notification.Builder(this, CH_RECV)
                 .setSmallIcon(R.drawable.ic_share)
