@@ -45,7 +45,7 @@ class ShareSendService : Service() {
         private const val NOTIF_ID = 2
         private const val DISCOVER_MS = 6_000L       // cihaz arama süresi
         private const val WATCHDOG_MS = 16_000L      // çözümleme takılırsa zorla bitir
-        private const val BUF = 256 * 1024
+        private const val BUF = 1 shl 20          // MyL ile aynı: 1 MB okuma/yazma tamponu
 
         /** Verilen dosyaları açık cihazlara göndermek için servisi başlatır. */
         fun start(c: Context, uris: List<Uri>): Boolean {
@@ -332,7 +332,7 @@ class ShareSendService : Service() {
                     s.connect(InetSocketAddress(addr, port), 5_000)
                     s.soTimeout = 30_000
                     val out = s.getOutputStream()
-                    val head = "POST /send HTTP/1.1\r\n" +
+                    val head = "POST /u HTTP/1.1\r\n" +
                         "Host: ${addr.hostAddress}:$port\r\n" +
                         "Content-Type: application/octet-stream\r\n" +
                         "Content-Length: ${item.size}\r\n" +
