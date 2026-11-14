@@ -100,6 +100,7 @@ class ShareService : Service() {
 
     private var holds = 0
     private var wifiLock: WifiManager.WifiLock? = null
+    private var wifiLock2: WifiManager.WifiLock? = null
     private var cpuLock: PowerManager.WakeLock? = null
 
     private val nb by lazy {
@@ -424,6 +425,14 @@ class ShareService : Service() {
                 setReferenceCounted(false)
                 acquire()
             }
+            // Android 14 öncesinde HIGH_PERF de tutulur: düşük gecikme kilidi yalnızca ön plan + ekran açıkken etkindir,
+            // arka planda alırken Wi-Fi güç tasarrufu hızı düşürmesin.
+            if (Build.VERSION.SDK_INT in 29..33) {
+                wifiLock2 = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "share2").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }
             cpuLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "atvbasic:share").apply {
                     setReferenceCounted(false)
@@ -448,6 +457,8 @@ class ShareService : Service() {
 
     private fun dropLocks() {
         try { wifiLock?.release() } catch (e: Exception) { }
+        try { wifiLock2?.release() } catch (e: Exception) { }
+        wifiLock2 = null
         try { cpuLock?.release() } catch (e: Exception) { }
         wifiLock = null
         cpuLock = null
