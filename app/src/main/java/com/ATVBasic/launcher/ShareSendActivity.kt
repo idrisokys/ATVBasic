@@ -29,9 +29,9 @@ class ShareSendActivity : Activity() {
 
         // Android 17+: yerel ağ erişimi çalışma zamanı izni (cihaz keşfi + gönderim için gerekli).
         if (Build.VERSION.SDK_INT >= 37 &&
-            checkSelfPermission(LauncherActivity.PERM_LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED
+            checkSelfPermission(PERM_LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED
         ) {
-            requestPermissions(arrayOf(LauncherActivity.PERM_LOCAL_NETWORK), REQ_NET)
+            requestPermissions(arrayOf(PERM_LOCAL_NETWORK), REQ_NET)
             return
         }
         go()
@@ -62,6 +62,7 @@ class ShareSendActivity : Activity() {
 
     private companion object {
         const val REQ_NET = 7
+        const val PERM_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
     }
 }
 
