@@ -30,7 +30,6 @@ import android.widget.GridView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -533,7 +532,7 @@ class LauncherActivity : Activity() {
         if (ok && resumed) {
             loadWallpaper(WallpaperStore.stamp(this))
         } else if (!ok && manual) {
-            Toast.makeText(this, R.string.toast_wallpaper_failed, Toast.LENGTH_SHORT).show()
+            showLabel(R.string.toast_wallpaper_failed)
         }
         scheduleRotate()
     }
@@ -550,11 +549,7 @@ class LauncherActivity : Activity() {
         submit(io) {
             val ok = WallpaperStore.saveToDownloads(app)
             ui.post {
-                Toast.makeText(
-                    app,
-                    if (ok) R.string.toast_saved else R.string.toast_save_failed,
-                    Toast.LENGTH_SHORT,
-                ).show()
+                if (!isDestroyed) showLabel(if (ok) R.string.toast_saved else R.string.toast_save_failed)
             }
         }
     }
@@ -576,7 +571,8 @@ class LauncherActivity : Activity() {
 
     // ------------------------------------------------------------------ sharing
 
-    private fun toast(res: Int) = Toast.makeText(this, res, Toast.LENGTH_SHORT).show()
+    /** Messages use the transparent label instead of the system toast (whose background cannot be changed). */
+    private fun toast(res: Int) = showLabel(res)
 
     /** Permissions sharing cannot work without (notifications are optional). */
     private fun requiredSharePerms(): List<String> {
@@ -758,7 +754,7 @@ class LauncherActivity : Activity() {
         for (i in 0 until DOCK_SLOTS) {
             if (slotEntry(i) == null) {
                 setSlot(i, e.pkg)
-                Toast.makeText(this, R.string.toast_added_dock, Toast.LENGTH_SHORT).show()
+                showLabel(R.string.toast_added_dock)
                 return
             }
         }
@@ -815,7 +811,7 @@ class LauncherActivity : Activity() {
                 // try the next candidate
             }
         }
-        Toast.makeText(this, R.string.toast_unavailable, Toast.LENGTH_SHORT).show()
+        showLabel(R.string.toast_unavailable)
     }
 
     // ------------------------------------------------------------------ views

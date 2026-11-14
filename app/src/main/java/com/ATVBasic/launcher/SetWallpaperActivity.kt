@@ -15,7 +15,12 @@ import android.graphics.Paint
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
+import android.view.Gravity
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.TextView
+import android.os.Handler
+import android.os.Looper
 import java.io.File
 
 /**
@@ -24,17 +29,43 @@ import java.io.File
  */
 class SetWallpaperActivity : Activity() {
 
+    private val ui = Handler(Looper.getMainLooper())
+    private lateinit var label: TextView
+
+    /** Shows [res] in a transparent label (like the launcher's own messages) and optionally closes after [closeMs]. */
+    private fun say(res: Int, closeMs: Long = 0L) {
+        label.setText(res)
+        if (closeMs > 0L) ui.postDelayed({ finish() }, closeMs)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE) // touches go through to the app below
+
+        val dp = resources.displayMetrics.density
+        label = TextView(this)
+        label.setBackgroundResource(R.drawable.label_bg)
+        label.setTextColor(getColor(R.color.text))
+        label.textSize = 18f
+        label.setShadowLayer(4f, 0f, 1f, 0xCC000000.toInt())
+        label.setPadding((20 * dp).toInt(), (8 * dp).toInt(), (20 * dp).toInt(), (8 * dp).toInt())
+        val lp = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.CENTER_HORIZONTAL,
+        )
+        lp.topMargin = (28 * dp).toInt()
+        val root = FrameLayout(this)
+        root.addView(label, lp)
+        setContentView(root)
 
         val uri = extractUri(intent)
         if (uri == null) {
-            Toast.makeText(this, R.string.share_no_image, Toast.LENGTH_LONG).show()
-            finish()
+            say(R.string.share_no_image, 2500L)
             return
         }
 
-        Toast.makeText(this, R.string.share_working, Toast.LENGTH_SHORT).show()
+        say(R.string.share_working)
         val app = applicationContext
         Thread({
             val msg = try {
@@ -44,11 +75,13 @@ class SetWallpaperActivity : Activity() {
             } catch (ex: OutOfMemoryError) {
                 R.string.share_failed
             }
-            runOnUiThread {
-                Toast.makeText(app, msg, Toast.LENGTH_LONG).show()
-                finish()
-            }
+            runOnUiThread { say(msg, 2500L) }
         }, "atv-share-wallpaper").start()
+    }
+
+    override fun onDestroy() {
+        ui.removeCallbacksAndMessages(null)
+        super.onDestroy()
     }
 }
 
