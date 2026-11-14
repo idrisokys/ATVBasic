@@ -30,4 +30,18 @@
     <string name="share_done_all">Launcher, ana ekran ve kilit ekranı güncellendi</string>
     <string name="share_done_system">Launcher ve ana ekran güncellendi (bu cihazda kilit ekranı yok)</string>
     <string name="share_done_launcher">Launcher duvar kağıdı güncellendi</string>
+
+    <string name="qs_share">Paylaşım</string>
+    <string name="label_share_on">Paylaşım açık</string>
+    <string name="label_share_off">Paylaşım kapalı</string>
+    <string name="toast_share_permission">Paylaşım için izin gerekli</string>
+    <string name="toast_share_failed">Paylaşım başlatılamadı</string>
+    <string name="qs_channel_run">Paylaşım</string>
+    <string name="qs_channel_recv">Alınan dosyalar</string>
+    <string name="qs_notif_waiting">Paylaşım açık, dosya bekleniyor</string>
+    <string name="qs_receiving">Alınıyor: %1$s</string>
+    <string name="qs_saved">Alındı: %1$s</string>
+    <string name="qs_partial">Aktarım yarım kaldı</string>
+    <string name="qs_error">Alma hatası</string>
+    <string name="qs_received">Dosya alındı</string>
 </resources>

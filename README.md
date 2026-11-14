@@ -30,6 +30,12 @@ Gereksiz hiçbir şey yok: duvar kağıdı, saat, tarih ve favori uygulamaların
 - Beğendiğin resmi kaydetmek için **Ayarlar** simgesine uzun bas, resim İndirilenler klasörüne kaydolur
 - Telefondan ya da tarayıcıdan herhangi bir resmi **Paylaş → "Duvar kağıdı yap"** diyerek duvar kağıdı yapabilirsin
 
+### 📡 Paylaşım
+- Ayarlar simgesinin yanındaki **paylaşım** simgesine bas: paylaşım açılır ve simge gök mavisi olur
+- Aynı simgeye tekrar basınca paylaşım kapanır
+- Açıkken aynı ağdaki QuickShare cihazları (Android, Mac) bu cihaza dosya gönderebilir; dosyalar **İndirilenler/Link** klasörüne kaydolur
+- Başka bir ekranı, düğmesi ya da cihaz listesi yoktur
+
 ### ⚙️ Ayarlar
 - Ayarlar simgesine basınca doğrudan cihazın sistem ayarları açılır
 

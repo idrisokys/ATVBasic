@@ -58,6 +58,8 @@ class LauncherActivity : Activity() {
         const val LABEL_SHOW_MS = 2_500L
         const val RETRY_MS = 30_000L
         const val REQ_STORAGE = 2
+        const val REQ_SHARE = 3
+        const val PERM_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
     }
 
     // ------------------------------------------------------------------ state
@@ -94,6 +96,7 @@ class LauncherActivity : Activity() {
     private lateinit var wallpaper: ImageView
     private lateinit var dateView: TextView
     private lateinit var slideshowLabel: TextView
+    private lateinit var shareBtn: ImageView
     private lateinit var grid: GridView
     private lateinit var dock: LinearLayout
     private lateinit var icons: IconLoader
@@ -161,6 +164,13 @@ class LauncherActivity : Activity() {
             saveWallpaper()
             true
         }
+        // Share icon: tap = sharing on, tap again = off. Sky blue while on.
+        shareBtn = findViewById(R.id.share)
+        shareBtn.setOnClickListener { toggleShare() }
+        updateShareIcon()
+        // After a restart the launcher brings sharing back if it was left on.
+        if (ShareService.isOn(this) && !ShareService.running) ShareService.start(this)
+
         // Short press: next picture. Long press: start / stop the 60 s slideshow.
         val next = findViewById<View>(R.id.next_wallpaper)
         next.setOnClickListener { nextWallpaper() }
@@ -217,6 +227,8 @@ class LauncherActivity : Activity() {
             addAction(Intent.ACTION_TIMEZONE_CHANGED)
         }
         register(dateReceiver, date)
+        ShareService.onChange = { updateShareIcon() }
+        updateShareIcon()
         updateDate()
         bindDock()
         slots[lastDock].requestFocus()
@@ -245,6 +257,7 @@ class LauncherActivity : Activity() {
     override fun onStop() {
         // Hidden: release the wallpaper, icons and grid views.
         started = false
+        ShareService.onChange = null
         unregisterReceiver(dateReceiver)
         dismissDialog()
         if (drawerOpen) closeDrawer(false)
@@ -346,6 +359,10 @@ class LauncherActivity : Activity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_SHARE) {
+            if (requiredSharePerms().isEmpty()) startShare() else toast(R.string.toast_share_permission)
+            return
+        }
         if (requestCode == REQ_STORAGE && grantResults.isNotEmpty() &&
             grantResults[0] == PackageManager.PERMISSION_GRANTED
         ) {
@@ -555,6 +572,56 @@ class LauncherActivity : Activity() {
         slideshowLabel.animate().alpha(0f).setDuration(400).withEndAction {
             if (slideshowLabel.alpha == 0f) slideshowLabel.visibility = View.GONE
         }.start()
+    }
+
+    // ------------------------------------------------------------------ sharing
+
+    private fun toast(res: Int) = Toast.makeText(this, res, Toast.LENGTH_SHORT).show()
+
+    /** Permissions sharing cannot work without (notifications are optional). */
+    private fun requiredSharePerms(): List<String> {
+        val l = ArrayList<String>()
+        if (Build.VERSION.SDK_INT >= 37 && checkSelfPermission(PERM_LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED) {
+            l.add(PERM_LOCAL_NETWORK)
+        }
+        if (Build.VERSION.SDK_INT < 29 &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            l.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+        return l
+    }
+
+    private fun toggleShare() {
+        if (ShareService.isOn(this)) {
+            ShareService.setOn(this, false)
+            ShareService.stop(this)
+            updateShareIcon()
+            showLabel(R.string.label_share_off)
+            return
+        }
+        val ask = ArrayList(requiredSharePerms())
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ask.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (ask.isEmpty()) startShare() else requestPermissions(ask.toTypedArray(), REQ_SHARE)
+    }
+
+    private fun startShare() {
+        ShareService.setOn(this, true)
+        if (ShareService.start(this)) {
+            showLabel(R.string.label_share_on)
+        } else {
+            ShareService.setOn(this, false)
+            toast(R.string.toast_share_failed)
+        }
+        updateShareIcon()
+    }
+
+    private fun updateShareIcon() {
+        if (ShareService.isOn(this)) shareBtn.setColorFilter(getColor(R.color.share_on)) else shareBtn.clearColorFilter()
     }
 
     // ------------------------------------------------------------------ drawer
