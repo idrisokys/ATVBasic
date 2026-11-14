@@ -35,6 +35,7 @@ Gereksiz hiçbir şey yok: duvar kağıdı, saat, tarih ve favori uygulamaların
 - Aynı simgeye tekrar basınca paylaşım kapanır
 - Açıkken aynı ağdaki QuickShare cihazları (Android, Mac) bu cihaza dosya gönderebilir; dosyalar **İndirilenler/Link** klasörüne kaydolur
 - Başka bir ekranı, düğmesi ya da cihaz listesi yoktur
+- **Dosya gönderme:** dosya yöneticisinde bir ya da birkaç dosya seç → **Paylaş → "Açık cihazlara gönder"**. Dosyalar, aynı ağda o an paylaşımı açık olan tüm cihazlara otomatik gönderilir (cihaz seçme ekranı yoktur); sonuç ekranda kısa bir mesajla ve bildirimle gösterilir
 
 ### ⚙️ Ayarlar
 - Ayarlar simgesine basınca doğrudan cihazın sistem ayarları açılır
