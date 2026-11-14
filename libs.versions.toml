@@ -1,6 +1,0 @@
-[versions]
-# AGP 9.x ships built-in Kotlin, so no separate kotlin-android plugin is needed.
-agp = "9.5.1"
-
-[plugins]
-android-application = { id = "com.android.application", version.ref = "agp" }
