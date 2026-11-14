@@ -611,11 +611,9 @@ class LauncherActivity : Activity() {
      * Ayar ekranı bir kez açılır; verilmezse paylaşım yine çalışır ve dosyalar İndirilenler/Link'e düşer.
      */
     private fun proceedShare() {
-        if (Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager() &&
-            !prefs.getBoolean(Prefs.ALL_FILES_ASKED, false)
-        ) {
-            prefs.edit().putBoolean(Prefs.ALL_FILES_ASKED, true).apply()
-            if (openAllFilesSettings()) toast(R.string.toast_allfiles)
+        if (Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager()) {
+            // İzin verilene kadar paylaşımı her açışta sorulur; ekran yoksa mesajda adb yolu anlatılır.
+            toast(if (openAllFilesSettings()) R.string.toast_allfiles else R.string.toast_allfiles_adb)
         }
         startShare()
     }

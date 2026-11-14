@@ -91,7 +91,7 @@ class ShareService : Service() {
 
     private class Chunk(val b: ByteArray, val n: Int) // n < 0: bitti işareti
 
-    private class Sink(val out: OutputStream, val commit: () -> Boolean, val abort: () -> Unit)
+    private class Sink(val out: OutputStream, val commit: () -> Boolean, val abort: () -> Unit, val root: Boolean = true)
 
     private val ui = Handler(Looper.getMainLooper())
     private val backToWaiting = Runnable { show(getString(R.string.qs_notif_waiting), -1) }
@@ -295,7 +295,7 @@ class ShareService : Service() {
                     ok = try { if (ok) sink.commit() else { sink.abort(); false } } catch (e: Exception) { false }
                 }
                 reply(s, if (ok) "200 OK" else "500 Error")
-                status(if (ok) getString(R.string.qs_saved, clean) else getString(R.string.qs_partial), -1)
+                status(if (ok) getString(if (sink.root) R.string.qs_saved else R.string.qs_saved_fallback, clean) else getString(R.string.qs_partial), -1)
                 if (ok) notifyReceived(clean)
             }
         } catch (e: Exception) {
@@ -346,6 +346,7 @@ class ShareService : Service() {
                 r.update(uri, v, null, null) > 0
             },
             { r.delete(uri, null, null) },
+            false,
         )
     }
 

@@ -33,7 +33,7 @@ Gereksiz hiçbir şey yok: duvar kağıdı, saat, tarih ve favori uygulamaların
 ### 📡 Paylaşım
 - Ayarlar simgesinin yanındaki **paylaşım** simgesine bas: paylaşım açılır ve simge gök mavisi olur
 - Aynı simgeye tekrar basınca paylaşım kapanır
-- Açıkken aynı ağdaki QuickShare cihazları (Android, Mac) bu cihaza dosya gönderebilir; dosyalar ana dizindeki **/Link** klasörüne kaydolur (Android 11+ için "Tüm dosyalara erişim" izni gerekir; verilmezse **İndirilenler/Link**'e kaydolur)
+- Açıkken aynı ağdaki QuickShare cihazları (Android, Mac) bu cihaza dosya gönderebilir; dosyalar ana dizindeki **/Link** klasörüne kaydolur (TV'de izin ekranı yoksa: `adb shell appops set io.github.idrisokys.atvbasic MANAGE_EXTERNAL_STORAGE allow`) (Android 11+ için "Tüm dosyalara erişim" izni gerekir; verilmezse **İndirilenler/Link**'e kaydolur)
 - Başka bir ekranı, düğmesi ya da cihaz listesi yoktur
 - **Dosya gönderme:** dosya yöneticisinde bir ya da birkaç dosya seç → **Paylaş → "Açık cihazlara gönder"**. Dosyalar, aynı ağda o an paylaşımı açık olan tüm cihazlara otomatik gönderilir (cihaz seçme ekranı yoktur); sonuç ekranda kısa bir mesajla ve bildirimle gösterilir
 

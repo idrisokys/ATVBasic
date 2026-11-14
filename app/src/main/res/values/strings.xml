@@ -36,12 +36,14 @@
     <string name="label_share_off">Paylaşım kapalı</string>
     <string name="toast_share_permission">Paylaşım için izin gerekli</string>
     <string name="toast_allfiles">Dosyaları ana dizindeki Link klasörüne kaydetmek için "Tüm dosyalara erişim" iznini verin</string>
+    <string name="toast_allfiles_adb">Bu TV'de "Tüm dosyalara erişim" ekranı yok; adb ile izin verin (README)</string>
     <string name="toast_share_failed">Paylaşım başlatılamadı</string>
     <string name="qs_channel_run">Paylaşım</string>
     <string name="qs_channel_recv">Alınan dosyalar</string>
     <string name="qs_notif_waiting">Paylaşım açık, dosya bekleniyor</string>
     <string name="qs_receiving">Alınıyor: %1$s</string>
     <string name="qs_saved">Alındı: %1$s</string>
+    <string name="qs_saved_fallback">Alındı: %1$s (İndirilenler/Link — ana dizin izni yok)</string>
     <string name="qs_partial">Aktarım yarım kaldı</string>
     <string name="qs_error">Alma hatası</string>
     <string name="qs_received">Dosya alındı</string>
