@@ -60,4 +60,10 @@
     <string name="notice_received">Dosya alındı</string>
     <string name="notice_sent">Dosya gönderildi</string>
     <string name="notice_send_failed">Dosya gönderilemedi</string>
+    <string name="pick_send">▶  Gönder (%1$d dosya)</string>
+    <string name="pick_up">↑  Üst klasör</string>
+    <string name="pick_root">Ana dizin</string>
+    <string name="pick_hint">OK: klasöre gir / dosya seç · Geri: üst klasör</string>
+    <string name="pick_none">Önce dosya seç</string>
+    <string name="pick_unreadable">Klasör okunamadı (Tüm dosyalara erişim izni gerekli)</string>
 </resources>
