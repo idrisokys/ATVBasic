@@ -137,11 +137,15 @@ class ShareService : Service() {
 
         try {
             // Tampon, bind'dan ÖNCE ayarlanmalı; yoksa büyük TCP penceresi (hız) devreye girmez.
-            val ss = ServerSocket().apply {
+            // Önceki portu yeniden kullan: servis yeniden başlayınca port değişmez, karşı cihazların önbelleği geçerli kalır.
+            val sp = getSharedPreferences(Prefs.FILE, MODE_PRIVATE)
+            fun open(port: Int) = ServerSocket().apply {
                 reuseAddress = true
                 receiveBufferSize = BUF
-                bind(InetSocketAddress(0))
+                bind(InetSocketAddress(port))
             }
+            val ss = try { open(sp.getInt("share_port", 0)) } catch (e: Exception) { open(0) }
+            sp.edit().putInt("share_port", ss.localPort).apply()
             server = ss
             thread(isDaemon = true, name = "share-accept") {
                 while (true) {
@@ -189,7 +193,7 @@ class ShareService : Service() {
 
         val m = getSystemService(Context.NSD_SERVICE) as NsdManager
         val l = object : NsdManager.RegistrationListener {
-            override fun onRegistrationFailed(s: NsdServiceInfo?, e: Int) {}
+            override fun onRegistrationFailed(s: NsdServiceInfo?, e: Int) { android.util.Log.w("ShareService", "mDNS kaydı başarısız: $e") }
             override fun onUnregistrationFailed(s: NsdServiceInfo?, e: Int) {}
             override fun onServiceRegistered(s: NsdServiceInfo?) {}
             override fun onServiceUnregistered(s: NsdServiceInfo?) {}
