@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="0.88" android:scaleY="0.88" android:pivotX="54" android:pivotY="52">
+
+        <!-- Gölge -->
+        <path android:fillColor="#48000000"
+            android:pathData="M27.5,33.5 H80.5 A5.5,5.5 0 0 1 86,39 V68 A5.5,5.5 0 0 1 80.5,73.5 H27.5 A5.5,5.5 0 0 1 22,68 V39 A5.5,5.5 0 0 1 27.5,33.5 Z"/>
+
+        <!-- Ayaklar -->
+        <path android:fillColor="#FFE5E7EB"
+            android:pathData="M30,71 H37 L34.5,76 H27.5 Z M71,71 H78 L80.5,76 H73.5 Z"/>
+
+        <!-- Beyaz çerçeve -->
+        <path android:fillColor="#FFFFFFFF"
+            android:pathData="M27.5,31 H80.5 A5.5,5.5 0 0 1 86,36.5 V65.5 A5.5,5.5 0 0 1 80.5,71 H27.5 A5.5,5.5 0 0 1 22,65.5 V36.5 A5.5,5.5 0 0 1 27.5,31 Z"/>
+
+        <!-- Ekran -->
+        <path android:pathData="M28.5,35 H79.5 A2.5,2.5 0 0 1 82,37.5 V62.5 A2.5,2.5 0 0 1 79.5,65 H28.5 A2.5,2.5 0 0 1 26,62.5 V37.5 A2.5,2.5 0 0 1 28.5,35 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear"
+                    android:startX="0" android:startY="35" android:endX="0" android:endY="65">
+                    <item android:offset="0" android:color="#FF1E1B4B"/>
+                    <item android:offset="0.55" android:color="#FF7C3AED"/>
+                    <item android:offset="1" android:color="#FFFB923C"/>
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Ekran içeriği (ekran şekline kırpılır) -->
+        <group>
+            <clip-path android:pathData="M28.5,35 H79.5 A2.5,2.5 0 0 1 82,37.5 V62.5 A2.5,2.5 0 0 1 79.5,65 H28.5 A2.5,2.5 0 0 1 26,62.5 V37.5 A2.5,2.5 0 0 1 28.5,35 Z"/>
+
+            <!-- Güneş parıltısı -->
+            <path android:pathData="M63,40 A11,11 0 1 1 63,62 A11,11 0 1 1 63,40 Z">
+                <aapt:attr name="android:fillColor">
+                    <gradient android:type="radial"
+                        android:centerX="63" android:centerY="51" android:gradientRadius="11">
+                        <item android:offset="0" android:color="#E6FDE68A"/>
+                        <item android:offset="1" android:color="#00FDE68A"/>
+                    </gradient>
+                </aapt:attr>
+            </path>
+            <!-- Güneş -->
+            <path android:fillColor="#FFFEF3C7"
+                android:pathData="M63,46 A5,5 0 1 1 63,56 A5,5 0 1 1 63,46 Z"/>
+            <!-- Arka dağ -->
+            <path android:fillColor="#D95B21B6"
+                android:pathData="M26,65 V58 L40,44 L50,54 L56,49 L66,59 L72,55 L82,63 V65 Z"/>
+            <!-- Ön dağ -->
+            <path android:fillColor="#FF2E1065"
+                android:pathData="M26,65 V60 L35,52 L44,61 L50,57 L60,65 Z"/>
+        </group>
+    </group>
+</vector>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ATVBasic" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
+    <!-- Translucent list/alert dialogs (dock pickers, source modes). -->
+    <style name="Theme.ATVBasic.Dialog" parent="@android:style/Theme.DeviceDefault.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/panel_bg</item>
+        <item name="android:backgroundDimAmount">0.2</item>
+    </style>
+</resources>
