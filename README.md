@@ -1,9 +1,8 @@
+appops set io.github.idrisokys.atvbasic MANAGE_EXTERNAL_STORAGE allow
 
-adb shell appops get io.github.idrisokys.atvbasic MANAGE_EXTERNAL_STORAGE
+appops set io.github.idrisokys.atvbasic SYSTEM_ALERT_WINDOW allow
 
-adb shell appops set io.github.idrisokys.atvbasic SYSTEM_ALERT_WINDOW allow
 
-adb shell appops get io.github.idrisokys.atvbasic MANAGE_EXTERNAL_STORAGE allow olmalı
 
 # ATV Basic
 
