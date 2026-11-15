@@ -14,6 +14,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
@@ -30,7 +31,6 @@ import android.widget.GridView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -360,7 +360,7 @@ class LauncherActivity : Activity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQ_SHARE) {
-            if (requiredSharePerms().isEmpty()) startShare() else toast(R.string.toast_share_permission)
+            if (requiredSharePerms().isEmpty()) proceedShare() else toast(R.string.toast_share_permission)
             return
         }
         if (requestCode == REQ_STORAGE && grantResults.isNotEmpty() &&
@@ -533,7 +533,7 @@ class LauncherActivity : Activity() {
         if (ok && resumed) {
             loadWallpaper(WallpaperStore.stamp(this))
         } else if (!ok && manual) {
-            Toast.makeText(this, R.string.toast_wallpaper_failed, Toast.LENGTH_SHORT).show()
+            showLabel(R.string.toast_wallpaper_failed)
         }
         scheduleRotate()
     }
@@ -550,11 +550,7 @@ class LauncherActivity : Activity() {
         submit(io) {
             val ok = WallpaperStore.saveToDownloads(app)
             ui.post {
-                Toast.makeText(
-                    app,
-                    if (ok) R.string.toast_saved else R.string.toast_save_failed,
-                    Toast.LENGTH_SHORT,
-                ).show()
+                if (!isDestroyed) showLabel(if (ok) R.string.toast_saved else R.string.toast_save_failed)
             }
         }
     }
@@ -576,7 +572,8 @@ class LauncherActivity : Activity() {
 
     // ------------------------------------------------------------------ sharing
 
-    private fun toast(res: Int) = Toast.makeText(this, res, Toast.LENGTH_SHORT).show()
+    /** Messages use the transparent label instead of the system toast (whose background cannot be changed). */
+    private fun toast(res: Int) = showLabel(res)
 
     /** Permissions sharing cannot work without (notifications are optional). */
     private fun requiredSharePerms(): List<String> {
@@ -606,7 +603,37 @@ class LauncherActivity : Activity() {
         ) {
             ask.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        if (ask.isEmpty()) startShare() else requestPermissions(ask.toTypedArray(), REQ_SHARE)
+        if (ask.isEmpty()) proceedShare() else requestPermissions(ask.toTypedArray(), REQ_SHARE)
+    }
+
+    /**
+     * Android 11+: dosyaları ana dizindeki /Link klasörüne yazmak için "Tüm dosyalara erişim" gerekir.
+     * Ayar ekranı bir kez açılır; verilmezse paylaşım yine çalışır ve dosyalar İndirilenler/Link'e düşer.
+     */
+    private fun proceedShare() {
+        if (Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager()) {
+            // İzin verilene kadar paylaşımı her açışta sorulur; ekran yoksa mesajda adb yolu anlatılır.
+            toast(if (openAllFilesSettings()) R.string.toast_allfiles else R.string.toast_allfiles_adb)
+        }
+        startShare()
+    }
+
+    private fun openAllFilesSettings(): Boolean {
+        if (Build.VERSION.SDK_INT < 30) return false
+        val pkg = Uri.parse("package:$packageName")
+        val actions = arrayOf(
+            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+            Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION,
+        )
+        for (a in actions) {
+            try {
+                startActivity(Intent(a, pkg))
+                return true
+            } catch (e: Exception) {
+                // bu TV'de ekran yok; sıradakini dene
+            }
+        }
+        return false
     }
 
     private fun startShare() {
@@ -758,7 +785,7 @@ class LauncherActivity : Activity() {
         for (i in 0 until DOCK_SLOTS) {
             if (slotEntry(i) == null) {
                 setSlot(i, e.pkg)
-                Toast.makeText(this, R.string.toast_added_dock, Toast.LENGTH_SHORT).show()
+                showLabel(R.string.toast_added_dock)
                 return
             }
         }
@@ -815,7 +842,7 @@ class LauncherActivity : Activity() {
                 // try the next candidate
             }
         }
-        Toast.makeText(this, R.string.toast_unavailable, Toast.LENGTH_SHORT).show()
+        showLabel(R.string.toast_unavailable)
     }
 
     // ------------------------------------------------------------------ views
