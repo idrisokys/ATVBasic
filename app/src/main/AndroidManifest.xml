@@ -119,6 +119,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Paylaş simgesine uzun basış: launcher'ın kendi dosya seçicisi, seçilenleri açık cihazlara gönderir -->
+        <activity
+            android:name=".FilePickActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity="" />
+
         <!-- Dosya alındı / gönderildi: şeffaf ekran yazısı -->
         <activity
             android:name=".NoticeActivity"
