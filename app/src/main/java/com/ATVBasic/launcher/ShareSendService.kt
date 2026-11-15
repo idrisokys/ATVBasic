@@ -46,6 +46,21 @@ class ShareSendService : Service() {
         private const val WATCHDOG_MS = 16_000L      // çözümleme takılırsa zorla bitir
         private const val BUF = 1 shl 20          // MyL ile aynı: 1 MB okuma/yazma tamponu
 
+        private const val EXTRA_PATHS = "paths"
+
+        /** Dosya yolları (launcher'ın kendi seçicisi) ile gönderim başlatır. */
+        fun startPaths(c: Context, paths: List<String>): Boolean {
+            if (paths.isEmpty()) return false
+            return try {
+                val i = Intent(c, ShareSendService::class.java)
+                    .putStringArrayListExtra(EXTRA_PATHS, ArrayList(paths))
+                c.startForegroundService(i)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
         /** Verilen dosyaları açık cihazlara göndermek için servisi başlatır. */
         fun start(c: Context, uris: List<Uri>): Boolean {
             if (uris.isEmpty()) return false
@@ -101,6 +116,7 @@ class ShareSendService : Service() {
         if (clip != null) {
             for (k in 0 until clip.itemCount) clip.getItemAt(k).uri?.let { uris.add(it) }
         }
+        intent?.getStringArrayListExtra(EXTRA_PATHS)?.forEach { uris.add(Uri.fromFile(File(it))) }
         if (uris.isEmpty()) {
             stopSelf()
             return START_NOT_STICKY

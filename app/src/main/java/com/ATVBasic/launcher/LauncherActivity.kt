@@ -167,6 +167,11 @@ class LauncherActivity : Activity() {
         // Share icon: tap = sharing on, tap again = off. Sky blue while on.
         shareBtn = findViewById(R.id.share)
         shareBtn.setOnClickListener { toggleShare() }
+        // Long press: own file picker; selected files are sent to every device that has sharing on.
+        shareBtn.setOnLongClickListener {
+            pickAndSend()
+            true
+        }
         updateShareIcon()
         // After a restart the launcher brings sharing back if it was left on.
         if (ShareService.isOn(this) && !ShareService.running) ShareService.start(this)
@@ -645,6 +650,16 @@ class LauncherActivity : Activity() {
             toast(R.string.toast_share_failed)
         }
         updateShareIcon()
+    }
+
+    private fun pickAndSend() {
+        try {
+            startActivity(
+                Intent(this, FilePickActivity::class.java),
+            )
+        } catch (e: Exception) {
+            toast(R.string.notice_send_failed)
+        }
     }
 
     private fun updateShareIcon() {
