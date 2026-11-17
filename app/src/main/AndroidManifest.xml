@@ -7,7 +7,7 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
-    <!-- Paylaşım: dosyaları ana dizindeki /Link klasörüne yazmak için (Android 11+ "Tüm dosyalara erişim"). -->
+    <!-- Paylaşım: dosya seçicide tüm klasörleri gezmek ve İndirilenler'e doğrudan yazmak için (Android 11+ "Tüm dosyalara erişim"). -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
     <!-- Paylaşım (QuickShare): foreground service, mDNS announce, Wi-Fi/CPU lock while receiving. -->
@@ -133,6 +133,13 @@
             android:exported="false"
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Dosya seçicide basılı tutulan dosyayı varsayılan uygulamayla açmak için salt-okunur içerik sağlayıcı -->
+        <provider
+            android:name=".OpenProvider"
+            android:authorities="${applicationId}.open"
+            android:exported="false"
+            android:grantUriPermissions="true" />
 
         <service
             android:name=".ShareService"
