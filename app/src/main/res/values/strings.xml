@@ -35,7 +35,7 @@
     <string name="label_share_on">Paylaşım açık</string>
     <string name="label_share_off">Paylaşım kapalı</string>
     <string name="toast_share_permission">Paylaşım için izin gerekli</string>
-    <string name="toast_allfiles">Dosyaları ana dizindeki Link klasörüne kaydetmek için Tüm dosyalara erişim iznini verin</string>
+    <string name="toast_allfiles">Dosya seçicide tüm klasörleri görmek için Tüm dosyalara erişim iznini verin</string>
     <string name="toast_allfiles_adb">Bu TV de Tüm dosyalara erişim ekranı yok; adb ile izin verin (README)</string>
     <string name="toast_share_failed">Paylaşım başlatılamadı</string>
     <string name="qs_channel_run">Paylaşım</string>
@@ -43,7 +43,7 @@
     <string name="qs_notif_waiting">Paylaşım açık, dosya bekleniyor</string>
     <string name="qs_receiving">Alınıyor: %1$s</string>
     <string name="qs_saved">Alındı: %1$s</string>
-    <string name="qs_saved_fallback">Alındı: %1$s (İndirilenler/Link — ana dizin izni yok)</string>
+    <string name="qs_saved_fallback">Alındı: %1$s</string>
     <string name="qs_partial">Aktarım yarım kaldı</string>
     <string name="qs_error">Alma hatası</string>
     <string name="qs_received">Dosya alındı</string>
@@ -63,7 +63,8 @@
     <string name="pick_send">▶  Gönder (%1$d dosya)</string>
     <string name="pick_up">↑  Üst klasör</string>
     <string name="pick_root">Ana dizin</string>
-    <string name="pick_hint">OK: klasöre gir / dosya seç · Geri: üst klasör</string>
+    <string name="pick_hint">OK: klasöre gir / dosya seç · OK basılı tut: dosyayı aç · Geri: üst klasör</string>
+    <string name="pick_open_failed">Bu dosyayı açacak uygulama yok</string>
     <string name="pick_none">Önce dosya seç</string>
     <string name="pick_unreadable">Klasör okunamadı (Tüm dosyalara erişim izni gerekli)</string>
 </resources>
