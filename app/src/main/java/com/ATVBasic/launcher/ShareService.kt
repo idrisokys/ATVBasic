@@ -41,8 +41,7 @@ import kotlin.concurrent.thread
 
 /**
  * Paylaşım. Açıkken bu cihaz ağda QuickShare cihazı olarak görünür (mDNS) ve gelen dosyaları
- * <ana dizin>/Link klasörüne kaydeder
- * (Android 11+ için "Tüm dosyalara erişim" izni yoksa İndirilenler/Link'e düşer). Arayüzü yoktur: ana ekrandaki paylaşım simgesi
+ * İndirilenler (Download) klasörüne kaydeder. Arayüzü yoktur: ana ekrandaki paylaşım simgesi
  * servisi açar / kapatır.
  */
 class ShareService : Service() {
@@ -309,9 +308,9 @@ class ShareService : Service() {
         }
     }
 
-    // ------------------------------------------------------------------ storage: <ana dizin>/Link (yedek: Download/Link)
+    // ------------------------------------------------------------------ storage: Download (İndirilenler)
 
-    /** Ana dizine (/storage/emulated/0/Link) doğrudan yazılabilir mi? */
+    /** İndirilenler klasörüne File API ile doğrudan yazılabilir mi? */
     @Suppress("DEPRECATION")
     private fun canWriteRoot(): Boolean = when {
         Build.VERSION.SDK_INT >= 30 -> Environment.isExternalStorageManager()
@@ -321,11 +320,11 @@ class ShareService : Service() {
 
     private fun openSink(name: String): Sink? {
         if (canWriteRoot()) rootSink(name)?.let { return it }
-        // İzin yoksa / yazılamadıysa: Android 10+ İndirilenler/Link (izinsiz), eski sürümlerde vazgeç.
+        // İzin yoksa / yazılamadıysa: Android 10+ İndirilenler (MediaStore, izinsiz), eski sürümlerde vazgeç.
         return if (Build.VERSION.SDK_INT >= 29) mediaSink(name) else null
     }
 
-    /** Android 10+: izin gerekmez; dosya İndirilenler/Link altına MediaStore ile yazılır. */
+    /** Android 10+: izin gerekmez; dosya İndirilenler klasörüne MediaStore ile yazılır. */
     @SuppressLint("NewApi")
     private fun mediaSink(name: String): Sink? {
         val r = contentResolver
@@ -334,7 +333,7 @@ class ShareService : Service() {
         val v = ContentValues()
         v.put(MediaStore.MediaColumns.DISPLAY_NAME, name)
         v.put(MediaStore.MediaColumns.MIME_TYPE, mime)
-        v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Link")
+        v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         v.put(MediaStore.MediaColumns.IS_PENDING, 1)
         val uri = r.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v) ?: return null
         val os = try { r.openOutputStream(uri) } catch (e: Exception) { null }
@@ -354,10 +353,10 @@ class ShareService : Service() {
         )
     }
 
-    /** Ana dizindeki /Link klasörüne doğrudan dosya olarak yazar (Android 8/9 depolama izni, Android 11+ tüm dosyalar izni). */
+    /** İndirilenler klasörüne doğrudan dosya olarak yazar (Android 8/9 depolama izni, Android 11+ tüm dosyalar izni). */
     @Suppress("DEPRECATION")
     private fun rootSink(name: String): Sink? {
-        val dir = File(Environment.getExternalStorageDirectory(), "Link")
+        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         if (!dir.isDirectory && !dir.mkdirs()) return null
         val tmp = File(dir, "$name.${UUID.randomUUID().toString().take(8)}.part")
         val os = try { FileOutputStream(tmp) } catch (e: Exception) { return null }

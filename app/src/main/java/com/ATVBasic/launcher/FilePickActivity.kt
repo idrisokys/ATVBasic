@@ -1,6 +1,7 @@
 package com.ATVBasic.launcher
 
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -11,6 +12,7 @@ import android.text.TextUtils
 import android.text.format.Formatter
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AbsListView
@@ -22,7 +24,7 @@ import java.io.File
 
 /**
  * Launcher'ın kendi dosya seçicisi (uzaktan kumanda ile gezilir). Ana ekrandaki paylaş simgesine
- * uzun basınca açılır. OK: klasöre gir / dosyayı seç-bırak. En üstteki "Gönder" satırı seçilen
+ * uzun basınca açılır. OK: klasöre gir / dosyayı seç-bırak. Bir dosyada OK'e (ya da dokunmatikte dosyaya) basılı tutmak dosyayı varsayılan uygulamayla açar. En üstteki "Gönder" satırı seçilen
  * dosyaları paylaşımı açık tüm cihazlara yollar ([ShareSendService]). Geri: üst klasör, kökte kapanır.
  */
 class FilePickActivity : Activity() {
@@ -102,7 +104,8 @@ class FilePickActivity : Activity() {
             isVerticalScrollBarEnabled = false
             setSelector(R.drawable.focus_cell)
             adapter = this@FilePickActivity.adapter
-            setOnItemClickListener { _, _, pos, _ -> onRow(rows[pos]) }
+            setOnItemClickListener { _, _, pos, _ -> if (!swallowClick) onRow(rows[pos]) }
+            setOnItemLongClickListener { _, _, pos, _ -> openFile(rows[pos]); true }
         }
         setContentView(
             LinearLayout(this).apply {
@@ -163,6 +166,47 @@ class FilePickActivity : Activity() {
             if (k >= 0) pos = k
         }
         list.setSelection(pos)
+    }
+
+    // Uzaktan kumandada OK'e basılı tutma: ListView bunu uzun tıklama saymaz, tuşları kendimiz izleriz.
+    private var longDone = false
+    private var swallowClick = false
+
+    override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+        val k = e.keyCode
+        if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+            if (e.action == KeyEvent.ACTION_DOWN) {
+                if (e.repeatCount == 0) longDone = false
+                else if (!longDone) {
+                    longDone = true
+                    val pos = list.selectedItemPosition
+                    if (pos in rows.indices) openFile(rows[pos])
+                    return true
+                } else return true
+            } else if (e.action == KeyEvent.ACTION_UP && longDone) {
+                // Basılı tutma dosyayı açtı; tuş bırakılınca normal tıklama (seç/bırak) çalışmasın.
+                swallowClick = true
+                try { return super.dispatchKeyEvent(e) } finally {
+                    swallowClick = false
+                    longDone = false
+                }
+            }
+        }
+        return super.dispatchKeyEvent(e)
+    }
+
+    /** Dosyayı sistemin varsayılan açma eylemiyle (ACTION_VIEW) açar; klasör ve diğer satırlarda bir şey yapmaz. */
+    private fun openFile(r: Row) {
+        if (r.kind != 3) return
+        val f = r.file ?: return
+        try {
+            val i = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(OpenProvider.uriFor(this, f), OpenProvider.mimeOf(f.name))
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(i)
+        } catch (e: Exception) {
+            Notice.show(this, getString(R.string.pick_open_failed))
+        }
     }
 
     private fun onRow(r: Row) {

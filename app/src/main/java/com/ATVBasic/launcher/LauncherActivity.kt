@@ -612,8 +612,8 @@ class LauncherActivity : Activity() {
     }
 
     /**
-     * Android 11+: dosyaları ana dizindeki /Link klasörüne yazmak için "Tüm dosyalara erişim" gerekir.
-     * Ayar ekranı bir kez açılır; verilmezse paylaşım yine çalışır ve dosyalar İndirilenler/Link'e düşer.
+     * Android 11+: dosya seçicinin tüm klasörleri görmesi için "Tüm dosyalara erişim" istenir.
+     * Verilmezse paylaşım yine çalışır; gelen dosyalar İndirilenler klasörüne düşer.
      */
     private fun proceedShare() {
         if (Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager()) {
