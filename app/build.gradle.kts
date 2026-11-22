@@ -65,31 +65,24 @@ android {
 // cargo-ndk derleme öncesi .so'ları src/main/jniLibs altına koyar. CI ortamında (CI=true) cargo-ndk zorunludur;
 // yerelde yoksa görev atlanır, APK yine derlenir ama paylaşım ve duvar kağıdı özellikleri çalışmaz (Native.ok == false).
 val rustAbis = listOf("arm64-v8a", "armeabi-v7a")
-val isCi = providers.environmentVariable("CI").isPresent
-
-fun hasCargoNdk(): Boolean = try {
-    ProcessBuilder("cargo", "ndk", "--version").redirectErrorStream(true).start().waitFor() == 0
-} catch (e: Exception) { false }
-
-// Değerler yapılandırma zamanında düz değişkenlere alınır: görev kapanışları betik nesnesine (this) başvurursa
-// Gradle yapılandırma önbelleği (configuration cache) "serialize edilemez" hatası verir.
-val cargoNdkOk = hasCargoNdk()
-if (!cargoNdkOk && isCi) {
-    throw GradleException("cargo-ndk bulunamadı: `cargo install cargo-ndk --locked` (ve rustup target add aarch64-linux-android armv7-linux-androideabi)")
-}
-if (!cargoNdkOk) {
-    logger.warn("cargo-ndk yok: Rust kütüphanesi derlenmedi; paylaşım ve duvar kağıdı çalışmaz.")
-}
 val rustDir = rootProject.file("native")
 val jniOut = layout.projectDirectory.dir("src/main/jniLibs").asFile.absolutePath
-val ndkArgs = listOf("cargo", "ndk") + rustAbis.flatMap { listOf("-t", it) } + listOf("-o", jniOut, "build", "--release")
 
-val buildRust by tasks.registering(Exec::class) {
+// cargo-ndk varlığı yapılandırma zamanında DEĞİL, görev çalışırken kabukta denetlenir (yapılandırma önbelleği, yapılandırma
+// sırasında süreç başlatmayı yasaklar). Yoksa: CI'da (CI ortam değişkeni) derleme durur, yerelde uyarıyla atlanır.
+val buildRust = tasks.register<Exec>("buildRust") {
     group = "build"
-    description = "native/ Rust kütüphanesini derler (cargo-ndk)"
-    enabled = cargoNdkOk
+    description = "native/ Rust kütüphanesini cargo-ndk ile derler"
     workingDir = rustDir
-    commandLine(ndkArgs)
+    val abiArgs = rustAbis.joinToString(" ") { "-t $it" }
+    commandLine(
+        "sh", "-c",
+        "if ! cargo ndk --version >/dev/null 2>&1; then " +
+            "echo 'cargo-ndk bulunamadi: cargo install cargo-ndk --locked (ve rustup target add aarch64-linux-android armv7-linux-androideabi)'; " +
+            "if [ -n \"\$CI\" ]; then exit 1; fi; " +
+            "echo 'Rust kutuphanesi derlenmedi: paylasim ve duvar kagidi calismaz.'; exit 0; fi; " +
+            "exec cargo ndk $abiArgs -o '$jniOut' build --release",
+    )
 }
 tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(buildRust) }
 
