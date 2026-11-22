@@ -920,14 +920,11 @@ class LauncherActivity : Activity() {
             }
         }
 
-        /** Pinned file manager tile: a vector icon on a plain tile, not an app bitmap. */
+        /** Pinned file manager tile: shows the app's own banner (16:9, like the other tiles). */
         fun bindFiles() {
             bound = null
-            icon.scaleType = ImageView.ScaleType.FIT_CENTER
-            val pad = (icon.resources.displayMetrics.density * 12).roundToInt()
-            icon.setPadding(pad, pad, pad, pad)
-            icon.setBackgroundResource(R.drawable.files_tile_bg)
-            icon.setImageResource(R.drawable.ic_files)
+            icon.scaleType = ImageView.ScaleType.FIT_XY
+            icon.setImageResource(R.drawable.banner)
         }
 
         fun release() {
