@@ -37,6 +37,7 @@ Gereksiz hiçbir şey yok: duvar kağıdı, saat, tarih ve favori uygulamaların
 - Aynı simgeye tekrar basınca paylaşım kapanır
 - Açıkken aynı ağdaki QuickShare cihazları (Android, Mac) bu cihaza dosya gönderebilir; dosyalar ana dizindeki **/Link** klasörüne kaydolur (TV'de izin ekranı yoksa: `adb shell appops set io.github.idrisokys.atvbasic MANAGE_EXTERNAL_STORAGE allow`) (Android 11+ için "Tüm dosyalara erişim" izni gerekir; verilmezse **İndirilenler/Link**'e kaydolur)
 - Başka bir ekranı, düğmesi ya da cihaz listesi yoktur
+- **Dosya seçip gönderme:** ana ekranda **aşağı** tuşuyla uygulama listesini aç; sağ üstteki **klasör simgesine** bas (listenin ilk satırından yukarı gidince seçilir) → launcher'ın kendi dosya seçicisi açılır, seçilen dosyalar paylaşımı açık cihazlara gönderilir
 - **Dosya gönderme:** dosya yöneticisinde bir ya da birkaç dosya seç → **Paylaş → "Açık cihazlara gönder"**. Dosyalar, aynı ağda o an paylaşımı açık olan tüm cihazlara otomatik gönderilir (cihaz seçme ekranı yoktur); sonuç ekranda kısa bir mesajla ve bildirimle gösterilir
 
 ### ⚙️ Ayarlar

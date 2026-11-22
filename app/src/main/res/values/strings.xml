@@ -32,6 +32,7 @@
     <string name="share_done_launcher">Launcher duvar kağıdı güncellendi</string>
 
     <string name="qs_share">Paylaşım</string>
+    <string name="drawer_send_files">Dosya seç ve gönder</string>
     <string name="label_share_on">Paylaşım açık</string>
     <string name="label_share_off">Paylaşım kapalı</string>
     <string name="toast_share_permission">Paylaşım için izin gerekli</string>

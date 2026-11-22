@@ -43,7 +43,7 @@ import kotlin.math.roundToInt
 
 /**
  * ATV Basic. Home = wallpaper, clock + date, Settings button and a dock of 6 pinned apps.
- * Press Down on the dock to open the full app grid; Up on its first row (or Back) closes it.
+ * Press Down on the dock to open the full app grid (with a file-send icon on top); Up on the icon (or Back) closes it.
  */
 class LauncherActivity : Activity() {
 
@@ -98,6 +98,8 @@ class LauncherActivity : Activity() {
     private lateinit var slideshowLabel: TextView
     private lateinit var shareBtn: ImageView
     private lateinit var grid: GridView
+    private lateinit var drawerBox: View
+    private lateinit var sendBtn: View
     private lateinit var dock: LinearLayout
     private lateinit var icons: IconLoader
     private val adapter = AppAdapter()
@@ -141,6 +143,8 @@ class LauncherActivity : Activity() {
         dateView = findViewById(R.id.date)
         slideshowLabel = findViewById(R.id.slideshow_label)
         grid = findViewById(R.id.grid)
+        drawerBox = findViewById(R.id.drawer_box)
+        sendBtn = findViewById(R.id.send_files)
         dock = findViewById(R.id.dock)
         icons = IconLoader(this, io, ui, { refreshIcons() }, iconW, iconH)
 
@@ -167,11 +171,8 @@ class LauncherActivity : Activity() {
         // Share icon: tap = sharing on, tap again = off. Sky blue while on.
         shareBtn = findViewById(R.id.share)
         shareBtn.setOnClickListener { toggleShare() }
-        // Long press: own file picker; selected files are sent to every device that has sharing on.
-        shareBtn.setOnLongClickListener {
-            pickAndSend()
-            true
-        }
+        // File picker icon (top of the app drawer): selected files are sent to every device that has sharing on.
+        sendBtn.setOnClickListener { pickAndSend() }
         updateShareIcon()
         // After a restart the launcher brings sharing back if it was left on.
         if (ShareService.isOn(this) && !ShareService.running) ShareService.start(this)
@@ -330,10 +331,18 @@ class LauncherActivity : Activity() {
                         return true
                     }
                 KeyEvent.KEYCODE_DPAD_UP ->
-                    if (drawerOpen && f === grid && grid.selectedItemPosition < COLUMNS) {
-                        closeDrawer(true)
-                        return true
+                    if (drawerOpen) {
+                        if (f === grid && grid.selectedItemPosition < COLUMNS) {
+                            sendBtn.requestFocus() // first row: up goes to the file icon
+                            return true
+                        }
+                        if (f === sendBtn) {
+                            closeDrawer(true) // up from the file icon closes the drawer
+                            return true
+                        }
                     }
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT ->
+                    if (drawerOpen && f === sendBtn) return true // nothing beside it
             }
         }
         return super.dispatchKeyEvent(e)
@@ -670,15 +679,15 @@ class LauncherActivity : Activity() {
 
     private fun openDrawer() {
         grid.adapter = adapter
-        grid.visibility = View.VISIBLE
+        drawerBox.visibility = View.VISIBLE
         grid.setSelection(0)
-        grid.requestFocus()
+        if (adapter.count > 0) grid.requestFocus() else sendBtn.requestFocus()
         drawerOpen = true
     }
 
     private fun closeDrawer(refocus: Boolean) {
         grid.adapter = null // frees the grid's views
-        grid.visibility = View.GONE
+        drawerBox.visibility = View.GONE
         drawerOpen = false
         if (refocus) slots[lastDock].requestFocus()
     }
