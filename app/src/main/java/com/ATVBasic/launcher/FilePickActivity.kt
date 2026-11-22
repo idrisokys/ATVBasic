@@ -23,8 +23,8 @@ import android.widget.TextView
 import java.io.File
 
 /**
- * Launcher'ın kendi dosya seçicisi (uzaktan kumanda ile gezilir; klasör listeleme Rust'ta). Uygulama listesinin (aşağı tuşuyla açılan ekran)
- * üstündeki dosya simgesiyle açılır. OK: klasöre gir / dosyayı seç-bırak. Bir dosyada OK'e (ya da dokunmatikte dosyaya) basılı tutmak dosyayı varsayılan uygulamayla açar. En üstteki "Gönder" satırı seçilen
+ * Launcher'ın kendi dosya seçicisi (uzaktan kumanda ile gezilir; klasör listeleme Rust'ta). Ana ekrandaki dock'un sabit 6.
+ * simgesi (Dosyalar) ile açılır. OK: klasöre gir / dosyayı seç-bırak. Bir dosyada OK'e (ya da dokunmatikte dosyaya) basılı tutmak dosyayı varsayılan uygulamayla açar. En üstteki "Gönder" satırı seçilen
  * dosyaları paylaşımı açık tüm cihazlara yollar ([ShareSendService]). Geri: üst klasör, kökte kapanır.
  */
 class FilePickActivity : Activity() {

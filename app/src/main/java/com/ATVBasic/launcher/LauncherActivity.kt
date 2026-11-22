@@ -42,8 +42,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 /**
- * ATV Basic. Home = wallpaper, clock + date, Settings button and a dock of 6 pinned apps.
- * Press Down on the dock to open the full app grid (with a file-send icon on top); Up on the icon (or Back) closes it.
+ * ATV Basic. Home = wallpaper, clock + date, Settings button and a dock of 5 pinned apps + the pinned file manager (6th).
+ * Press Down on the dock to open the full app grid; Up on its first row (or Back) closes it.
  */
 class LauncherActivity : Activity() {
 
@@ -59,6 +59,8 @@ class LauncherActivity : Activity() {
         const val RETRY_MS = 30_000L
         const val REQ_STORAGE = 2
         const val REQ_SHARE = 3
+        const val REQ_SETUP = 4
+        const val FILES_SLOT = DOCK_SLOTS - 1 // last dock icon is the pinned file manager
         const val PERM_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
     }
 
@@ -98,8 +100,6 @@ class LauncherActivity : Activity() {
     private lateinit var slideshowLabel: TextView
     private lateinit var shareBtn: ImageView
     private lateinit var grid: GridView
-    private lateinit var drawerBox: View
-    private lateinit var sendBtn: View
     private lateinit var dock: LinearLayout
     private lateinit var icons: IconLoader
     private val adapter = AppAdapter()
@@ -127,6 +127,7 @@ class LauncherActivity : Activity() {
 
         prefs = getSharedPreferences(Prefs.FILE, MODE_PRIVATE)
         for (i in 0 until DOCK_SLOTS) dockPkgs[i] = prefs.getString(Prefs.SLOT_PREFIX + i, null)
+        dockPkgs[FILES_SLOT] = null // reserved for the file manager
 
         // Six equal columns across the content width, 16:9 tiles inside 8 dp padding.
         val dm = resources.displayMetrics
@@ -143,8 +144,6 @@ class LauncherActivity : Activity() {
         dateView = findViewById(R.id.date)
         slideshowLabel = findViewById(R.id.slideshow_label)
         grid = findViewById(R.id.grid)
-        drawerBox = findViewById(R.id.drawer_box)
-        sendBtn = findViewById(R.id.send_files)
         dock = findViewById(R.id.dock)
         icons = IconLoader(this, io, ui, { refreshIcons() }, iconW, iconH)
 
@@ -171,8 +170,6 @@ class LauncherActivity : Activity() {
         // Share icon: tap = sharing on, tap again = off. Sky blue while on.
         shareBtn = findViewById(R.id.share)
         shareBtn.setOnClickListener { toggleShare() }
-        // File picker icon (top of the app drawer): selected files are sent to every device that has sharing on.
-        sendBtn.setOnClickListener { pickAndSend() }
         updateShareIcon()
         // After a restart the launcher brings sharing back if it was left on.
         if (ShareService.isOn(this) && !ShareService.running) ShareService.start(this)
@@ -206,11 +203,38 @@ class LauncherActivity : Activity() {
 
         scan()
 
-        // First launch only: offer to become the default home screen.
+    }
+
+    /**
+     * First launch after install, in order: all-files access, then the default-home question.
+     * Runs from onResume, so when the settings screen closes the next step follows by itself.
+     */
+    private fun firstRun() {
+        if (!prefs.getBoolean(Prefs.ALL_FILES_ASKED, false)) {
+            prefs.edit().putBoolean(Prefs.ALL_FILES_ASKED, true).apply()
+            if (askStorageAccess()) return
+        }
         if (!prefs.getBoolean(Prefs.HOME_ASKED, false)) {
             prefs.edit().putBoolean(Prefs.HOME_ASKED, true).apply()
             if (!HomeRole.isDefault(this)) ui.post { askDefaultHome() }
         }
+    }
+
+    /** Asks for full disk access; true when a system screen / dialog was opened. */
+    private fun askStorageAccess(): Boolean {
+        if (Build.VERSION.SDK_INT >= 30) {
+            if (Environment.isExternalStorageManager()) return false
+            if (openAllFilesSettings()) return true
+            showLabel(R.string.toast_allfiles_adb) // no such screen on this TV: adb route (README)
+            return false
+        }
+        if (Build.VERSION.SDK_INT < 29 &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), REQ_SETUP)
+            return true
+        }
+        return false
     }
 
     private fun askDefaultHome() {
@@ -248,6 +272,7 @@ class LauncherActivity : Activity() {
         slideshow = prefs.getBoolean(Prefs.SLIDESHOW, false)
         scheduleRotate()
         showUi()
+        firstRun()
     }
 
     override fun onPause() {
@@ -331,18 +356,10 @@ class LauncherActivity : Activity() {
                         return true
                     }
                 KeyEvent.KEYCODE_DPAD_UP ->
-                    if (drawerOpen) {
-                        if (f === grid && grid.selectedItemPosition < COLUMNS) {
-                            sendBtn.requestFocus() // first row: up goes to the file icon
-                            return true
-                        }
-                        if (f === sendBtn) {
-                            closeDrawer(true) // up from the file icon closes the drawer
-                            return true
-                        }
+                    if (drawerOpen && f === grid && grid.selectedItemPosition < COLUMNS) {
+                        closeDrawer(true)
+                        return true
                     }
-                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT ->
-                    if (drawerOpen && f === sendBtn) return true // nothing beside it
             }
         }
         return super.dispatchKeyEvent(e)
@@ -679,15 +696,15 @@ class LauncherActivity : Activity() {
 
     private fun openDrawer() {
         grid.adapter = adapter
-        drawerBox.visibility = View.VISIBLE
+        grid.visibility = View.VISIBLE
         grid.setSelection(0)
-        if (adapter.count > 0) grid.requestFocus() else sendBtn.requestFocus()
+        grid.requestFocus()
         drawerOpen = true
     }
 
     private fun closeDrawer(refocus: Boolean) {
         grid.adapter = null // frees the grid's views
-        drawerBox.visibility = View.GONE
+        grid.visibility = View.GONE
         drawerOpen = false
         if (refocus) slots[lastDock].requestFocus()
     }
@@ -726,6 +743,12 @@ class LauncherActivity : Activity() {
     private fun bindDock() {
         for (i in 0 until DOCK_SLOTS) {
             val h = holder(slots[i])
+            if (i == FILES_SLOT) {
+                h.pkg = null
+                h.label.setText(R.string.files_label)
+                h.bindFiles()
+                continue
+            }
             val e = slotEntry(i)
             if (e == null) {
                 h.pkg = null
@@ -753,11 +776,16 @@ class LauncherActivity : Activity() {
     }
 
     private fun onSlotClick(idx: Int) {
+        if (idx == FILES_SLOT) {
+            pickAndSend()
+            return
+        }
         val e = slotEntry(idx)
         if (e != null) open(e.launchIntent()) else pickForSlot(idx)
     }
 
     private fun showSlotMenu(idx: Int) {
+        if (idx == FILES_SLOT) return // the file manager is fixed
         val e = slotEntry(idx)
         if (e == null) {
             pickForSlot(idx)
@@ -786,6 +814,7 @@ class LauncherActivity : Activity() {
     }
 
     private fun setSlot(idx: Int, pkg: String?) {
+        if (idx == FILES_SLOT) return
         if (pkg != null) {
             for (i in 0 until DOCK_SLOTS) {
                 if (pkg == dockPkgs[i]) dockPkgs[i] = null // an app lives in one slot only
@@ -803,10 +832,10 @@ class LauncherActivity : Activity() {
     }
 
     private fun addToDock(e: AppEntry) {
-        for (i in 0 until DOCK_SLOTS) {
+        for (i in 0 until FILES_SLOT) {
             if (e.pkg == dockPkgs[i]) return // already there
         }
-        for (i in 0 until DOCK_SLOTS) {
+        for (i in 0 until FILES_SLOT) {
             if (slotEntry(i) == null) {
                 setSlot(i, e.pkg)
                 showLabel(R.string.toast_added_dock)
@@ -814,7 +843,7 @@ class LauncherActivity : Activity() {
             }
         }
         // Dock is full: ask which app to replace.
-        val names = Array(DOCK_SLOTS) { slotEntry(it)?.label ?: "" }
+        val names = Array(FILES_SLOT) { slotEntry(it)?.label ?: "" }
         dismissDialog()
         dialog = AlertDialog.Builder(this, R.style.Theme_ATVBasic_Dialog)
             .setTitle(R.string.replace_which)
@@ -889,6 +918,16 @@ class LauncherActivity : Activity() {
                 bound = b
                 icon.setImageBitmap(b)
             }
+        }
+
+        /** Pinned file manager tile: a vector icon on a plain tile, not an app bitmap. */
+        fun bindFiles() {
+            bound = null
+            icon.scaleType = ImageView.ScaleType.FIT_CENTER
+            val pad = (icon.resources.displayMetrics.density * 12).roundToInt()
+            icon.setPadding(pad, pad, pad, pad)
+            icon.setBackgroundResource(R.drawable.files_tile_bg)
+            icon.setImageResource(R.drawable.ic_files)
         }
 
         fun release() {
