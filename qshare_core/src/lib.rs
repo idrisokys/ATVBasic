@@ -6,8 +6,10 @@
 //! Platform kabukları bu crate'in üstüne ince bir köprü koyar: Plan'da C ABI (`plan_qs_*`), Android'de JNI
 //! (`Native.serverStart / serverPoll / send / sync`). Platforma özgü davranış `share::server::Config` ve
 //! `share::sync::Scope` alanlarıyla seçilir; protokol ve eşitleme mantığı iki tarafta aynı koddur.
-//! mDNS/NSD (`_qshare._tcp`) yayını ve cihaz bulma platform tarafında kalır; Rust'a `ip:port` verilir.
+//! mDNS/NSD (`_qshare._tcp`) YAYINI platform tarafında kalır (NsdManager / Bonjour); cihaz BULMA ise `mdns` modülünde
+//! (tek soketle paralel çözümleme) yapılır ve platformun kendi aramasına ek olarak çalışır.
 
+pub mod mdns;
 pub mod share;
 pub mod unicode;
 mod unicode_tables;

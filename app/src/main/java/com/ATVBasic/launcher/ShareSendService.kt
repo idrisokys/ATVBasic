@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -37,6 +38,7 @@ class ShareSendService : Service() {
 
     companion object {
         private const val TYPE = "_qshare._tcp."
+        private val scanTokens = java.util.concurrent.atomic.AtomicLong()
         private const val CH = "share_send"
         private const val NOTIF_ID = 2
         private const val DISCOVER_MS = 6_000L       // cihaz arama süresi
@@ -136,6 +138,9 @@ class ShareSendService : Service() {
         private var items: List<Native.SendItem> = emptyList()
         private var resolving = false
         private var discovering = true
+        private var rustRunning = false              // Rust mDNS taraması sürüyor
+        private val addrs = HashSet<String>()        // aynı cihaza (ip:port) iki kez gönderilmesin: NsdManager + Rust
+        private val scanToken = scanTokens.incrementAndGet()
         private var closed = false
         private var finished = false
 
@@ -147,10 +152,12 @@ class ShareSendService : Service() {
             // Dosya bilgileri (ad, tanıtıcı) arka planda hazırlanır; cihaz arama bunu beklemez.
             thread(isDaemon = true, name = "send-prepare") { prepareAndStart() }
             startDiscovery()
+            startRustScan()
             main.postDelayed({ stopDiscovery() }, DISCOVER_MS)
             main.postDelayed({
                 synchronized(lock) {
                     discovering = false
+                    rustRunning = false
                     pending.clear()
                     resolving = false
                 }
@@ -291,9 +298,37 @@ class ShareSendService : Service() {
         }
 
         private fun stopDiscovery() {
+            Native.mdnsCancel(scanToken)
             try { listener?.let { nsd.stopServiceDiscovery(it) } } catch (e: Exception) { }
             synchronized(lock) { discovering = false }
             maybeClose()
+        }
+
+        /**
+         * Rust mDNS taraması (NsdManager'a EK): bulunan tüm cihazlar paralel çözülür. Hiçbir şey bulunamazsa
+         * NsdManager sonuçları geçerli kalır. Tarama bitene kadar [maybeClose] bekler.
+         */
+        private fun startRustScan() {
+            if (!Native.ok) return
+            synchronized(lock) { rustRunning = true }
+            thread(isDaemon = true, name = "send-mdns") {
+                var ml: WifiManager.MulticastLock? = null
+                try {
+                    val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                    ml = wm.createMulticastLock("atv-mdns").apply { setReferenceCounted(false); acquire() }
+                    val hits = Native.mdnsBrowse(scanToken, localIpv4(), ownName, (DISCOVER_MS - 500).toInt())
+                    for (h in hits.orEmpty()) {
+                        if (h.port <= 0 || (h.id.isNotEmpty() && h.id == ownId)) continue
+                        synchronized(lock) { seen.add(h.instance) }
+                        deliver(h.name.ifEmpty { h.instance }, "${h.ip}:${h.port}")
+                    }
+                } catch (t: Throwable) {
+                } finally {
+                    try { ml?.release() } catch (e: Exception) { }
+                    synchronized(lock) { rustRunning = false }
+                    maybeClose()
+                }
+            }
         }
 
         /** NsdManager aynı anda tek çözümlemeye izin verir; sırayla çözülür. */
@@ -330,9 +365,15 @@ class ShareSendService : Service() {
             if (id != null && id == ownId) return
             val name = attr(i, "n") ?: i.serviceName
             val addr = formatAddr(pickAddress(i) ?: return, i.port) ?: return
+            deliver(name, addr)
+        }
+
+        /** Bulunan cihazı gönderime ekler; aynı adres ikinci kez (NsdManager + Rust) eklenmez. */
+        private fun deliver(name: String, addr: String) {
             val job: Native.SendJob?
             synchronized(lock) {
                 if (closed) return
+                if (!addrs.add(addr)) return
                 job = send
                 if (job == null) early.add(name to addr)
             }
@@ -363,7 +404,7 @@ class ShareSendService : Service() {
             val job: Native.SendJob
             val flush: List<Pair<String, String>>
             synchronized(lock) {
-                if (closed || discovering || resolving || pending.isNotEmpty()) return
+                if (closed || discovering || rustRunning || resolving || pending.isNotEmpty()) return
                 job = send ?: return // dosyalar hazır değil: hazır olunca [prepareAndStart] yeniden dener
                 closed = true
                 flush = ArrayList(early)
@@ -378,6 +419,7 @@ class ShareSendService : Service() {
                 if (finished) return
                 finished = true
             }
+            Native.mdnsCancel(scanToken)
             try { File(cacheDir, "send").deleteRecursively() } catch (e: Exception) { }
             try { listener?.let { nsd.stopServiceDiscovery(it) } } catch (e: Exception) { }
             val msg = getString(if (ok) R.string.notice_sent else R.string.notice_send_failed)
@@ -399,3 +441,15 @@ class ShareSendService : Service() {
         }
     }
 }
+
+/**
+ * Wi-Fi / Ethernet arayüzünün özel (site-local) IPv4 adresi. Rust mDNS soketi bu adrese bağlanır; böylece çok noktaya
+ * yayın doğru arayüzden çıkar. Bulunamazsa null: sistem seçer.
+ */
+private fun localIpv4(): String? = try {
+    java.net.NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
+        .filter { it.isUp && !it.isLoopback && it.supportsMulticast() }
+        .sortedBy { if (it.name.startsWith("wlan") || it.name.startsWith("eth") || it.name.startsWith("ap")) 0 else 1 }
+        .flatMap { it.inetAddresses.toList() }
+        .firstOrNull { it is Inet4Address && it.isSiteLocalAddress }?.hostAddress
+} catch (e: Exception) { null }

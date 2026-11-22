@@ -31,6 +31,8 @@ internal object Native {
     @JvmStatic private external fun nSendPeer(id: Long, dev: String, addr: String)
     @JvmStatic private external fun nSendClose(id: Long)
     @JvmStatic private external fun nSendPoll(id: Long): Array<String>?
+    @JvmStatic private external fun nMdnsBrowse(token: Long, service: String, local: String?, skip: String?, timeoutMs: Int): Array<String>?
+    @JvmStatic private external fun nMdnsCancel(token: Long)
     @JvmStatic private external fun nListDir(dir: String): Array<String>?
     @JvmStatic private external fun nResolveInside(root: String, path: String): String?
     @JvmStatic private external fun nWpListingUrl(): String?
@@ -120,6 +122,30 @@ internal object Native {
         for (i in items) {
             if (i.fd >= 0) try { android.os.ParcelFileDescriptor.adoptFd(i.fd).close() } catch (e: Exception) { }
         }
+    }
+
+    // ------------------------------------------------------------ mDNS cihaz tarama (Rust, qshare_core::mdns)
+
+    class MdnsHit(val instance: String, val ip: String, val port: Int, val id: String, val name: String)
+
+    /**
+     * Tek seferlik mDNS taraması: bulunan tüm cihazlar tek soketle PARALEL çözülür (NsdManager sırayla çözer).
+     * Engelleyicidir (arka plan iş parçacığı); en çok [timeoutMs] sürer. [token] ile [mdnsCancel] erken bitirir.
+     * [local]: çıkış arayüzünün IPv4'ü. Kütüphane yoksa/hata olursa null.
+     */
+    fun mdnsBrowse(token: Long, local: String?, skip: String?, timeoutMs: Int): List<MdnsHit>? = safe {
+        val a = nMdnsBrowse(token, "_qshare._tcp.local", local, skip, timeoutMs) ?: return@safe null
+        val out = ArrayList<MdnsHit>(a.size / 5)
+        var i = 0
+        while (i + 4 < a.size) {
+            out.add(MdnsHit(a[i], a[i + 1], a[i + 2].toIntOrNull() ?: 0, a[i + 3], a[i + 4]))
+            i += 5
+        }
+        out
+    }
+
+    fun mdnsCancel(token: Long) {
+        safe { nMdnsCancel(token); true }
     }
 
     // ------------------------------------------------------------ dosyalar

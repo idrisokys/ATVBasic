@@ -321,3 +321,45 @@ pub extern "system" fn Java_com_ATVBasic_launcher_Native_nSendPoll<'l>(mut env: 
         }
     })
 }
+
+/// Tek seferlik mDNS cihaz taraması (`qshare_core::mdns`): tüm cihazlar tek soketle paralel çözülür.
+/// Dönüş: her cihaz için 5 alan [örnek adı, ip, port, TXT "i" (kimlik), TXT "n" (ad)]; hata: null.
+/// `token` ile `nMdnsCancel(token)` taramayı erken bitirir. `local`: çıkış arayüzünün IPv4'ü (boş olabilir).
+#[no_mangle]
+pub extern "system" fn Java_com_ATVBasic_launcher_Native_nMdnsBrowse<'l>(
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    token: jlong,
+    service: JString<'l>,
+    local: JString<'l>,
+    skip: JString<'l>,
+    timeout_ms: jint,
+) -> jobjectArray {
+    guard(null_mut(), || {
+        let Some(svc) = jstr(&mut env, &service).filter(|s| !s.is_empty()) else { return null_mut() };
+        let local = jstr(&mut env, &local).and_then(|s| s.trim().parse::<std::net::Ipv4Addr>().ok());
+        let skip = jstr(&mut env, &skip).filter(|s| !s.is_empty());
+        let mut o = qshare_core::mdns::Options::new(&svc, local, Duration::from_millis(timeout_ms.clamp(200, 15_000) as u64));
+        o.skip_instance = skip;
+        match qshare_core::mdns::browse_cancellable(token, &o) {
+            Ok(found) => {
+                let mut flat: Vec<String> = Vec::with_capacity(found.len() * 5);
+                for f in found {
+                    flat.push(f.instance.clone());
+                    flat.push(f.addr.to_string());
+                    flat.push(f.port.to_string());
+                    flat.push(f.txt_get("i").unwrap_or("").to_string());
+                    flat.push(f.txt_get("n").unwrap_or("").to_string());
+                }
+                to_jstr_array(&mut env, &flat)
+            }
+            Err(_) => null_mut(),
+        }
+    })
+}
+
+/// Çalışan `nMdnsBrowse(token, ..)` taramasını durdurur.
+#[no_mangle]
+pub extern "system" fn Java_com_ATVBasic_launcher_Native_nMdnsCancel<'l>(_env: JNIEnv<'l>, _c: JClass<'l>, token: jlong) {
+    guard((), || qshare_core::mdns::cancel(token));
+}

@@ -11,7 +11,7 @@ use super::bundle;
 use super::sync::{manifest_body, ms, Item, Scope};
 use std::fs::{self, File};
 use std::io::{self, BufWriter, ErrorKind, Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -77,7 +77,8 @@ impl Server {
     /// `port` 0 ise işletim sistemi boş bir port seçer (`port()` ile okunur).
     pub fn start(cfg: Config, port: u16, sink: Sink) -> std::io::Result<Server> {
         let listener = TcpListener::bind(("::", port)).or_else(|_| TcpListener::bind(("0.0.0.0", port)))?;
-        listener.set_nonblocking(true)?;
+        // Bloklayan accept: boşta uyanmaz, bağlantıya anında cevap verir. Durdururken `Drop` kendine bağlanıp uyandırır.
+        listener.set_nonblocking(false)?;
         let port = listener.local_addr()?.port();
         let _ = fs::create_dir_all(&cfg.recv_dir);
         let stop = Arc::new(AtomicBool::new(false));
@@ -87,13 +88,16 @@ impl Server {
             while !stop2.load(Ordering::Relaxed) {
                 match listener.accept() {
                     Ok((st, _)) => {
+                        if stop2.load(Ordering::Relaxed) {
+                            break; // uyandırma bağlantısı
+                        }
                         let (cfg, sink) = (cfg.clone(), sink.clone());
                         let _ = thread::Builder::new().name("qs-conn".into()).spawn(move || {
                             let _ = st.set_nonblocking(false);
                             handle(st, &cfg, &sink);
                         });
                     }
-                    Err(e) if e.kind() == ErrorKind::WouldBlock => thread::sleep(Duration::from_millis(40)),
+                    Err(e) if e.kind() == ErrorKind::Interrupted => {}
                     Err(_) => thread::sleep(Duration::from_millis(200)),
                 }
             }
@@ -112,6 +116,10 @@ impl Drop for Server {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         if let Some(h) = self.accept.take() {
+            // Bloklayan accept'i uyandır: kendimize kısa bir bağlantı aç (çift yığın veya yalnız IPv4 dinleyici).
+            let wake = Duration::from_millis(500);
+            let _ = TcpStream::connect_timeout(&SocketAddr::from((Ipv4Addr::LOCALHOST, self.port)), wake)
+                .or_else(|_| TcpStream::connect_timeout(&SocketAddr::from((Ipv6Addr::LOCALHOST, self.port)), wake));
             let _ = h.join();
         }
     }
