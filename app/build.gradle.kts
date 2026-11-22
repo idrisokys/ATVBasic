@@ -71,20 +71,25 @@ fun hasCargoNdk(): Boolean = try {
     ProcessBuilder("cargo", "ndk", "--version").redirectErrorStream(true).start().waitFor() == 0
 } catch (e: Exception) { false }
 
+// Değerler yapılandırma zamanında düz değişkenlere alınır: görev kapanışları betik nesnesine (this) başvurursa
+// Gradle yapılandırma önbelleği (configuration cache) "serialize edilemez" hatası verir.
+val cargoNdkOk = hasCargoNdk()
+if (!cargoNdkOk && isCi) {
+    throw GradleException("cargo-ndk bulunamadı: `cargo install cargo-ndk --locked` (ve rustup target add aarch64-linux-android armv7-linux-androideabi)")
+}
+if (!cargoNdkOk) {
+    logger.warn("cargo-ndk yok: Rust kütüphanesi derlenmedi; paylaşım ve duvar kağıdı çalışmaz.")
+}
+val rustDir = rootProject.file("native")
+val jniOut = layout.projectDirectory.dir("src/main/jniLibs").asFile.absolutePath
+val ndkArgs = listOf("cargo", "ndk") + rustAbis.flatMap { listOf("-t", it) } + listOf("-o", jniOut, "build", "--release")
+
 val buildRust by tasks.registering(Exec::class) {
     group = "build"
-    description = "native/ Rust kütüphanesini ${rustAbis.joinToString()} için derler"
-    workingDir = rootProject.file("native")
-    commandLine(
-        listOf("cargo", "ndk") + rustAbis.flatMap { listOf("-t", it) } +
-            listOf("-o", file("src/main/jniLibs").absolutePath, "build", "--release"),
-    )
-    onlyIf {
-        val ok = hasCargoNdk()
-        if (!ok && isCi) throw GradleException("cargo-ndk bulunamadı: `cargo install cargo-ndk --locked` (ve rustup target add aarch64-linux-android armv7-linux-androideabi)")
-        if (!ok) logger.warn("cargo-ndk yok: Rust kütüphanesi derlenmedi; paylaşım ve duvar kağıdı çalışmaz.")
-        ok
-    }
+    description = "native/ Rust kütüphanesini derler (cargo-ndk)"
+    enabled = cargoNdkOk
+    workingDir = rustDir
+    commandLine(ndkArgs)
 }
 tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(buildRust) }
 
