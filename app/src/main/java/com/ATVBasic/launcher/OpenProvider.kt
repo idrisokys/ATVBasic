@@ -14,7 +14,7 @@ import java.io.FileNotFoundException
 
 /**
  * Dosya seçicide basılı tutulan dosyayı başka bir uygulamayla açmak için küçük, salt-okunur
- * içerik sağlayıcı (androidx FileProvider yerine; projede bağımlılık yok). Yalnızca
+ * içerik sağlayıcı (androidx FileProvider yerine; projede bağımlılık yok). Yol denetimi Rust'ta ([Native.resolveInside]). Yalnızca
  * [FilePickActivity] tarafından verilen geçici okuma izniyle erişilir (exported=false).
  */
 class OpenProvider : ContentProvider() {
@@ -33,13 +33,12 @@ class OpenProvider : ContentProvider() {
 
     override fun onCreate() = true
 
+    /** Yolun gerçek (sembolik bağlar çözülmüş) hali depolama kökü içinde kalan düz bir dosya olmalı; denetim Rust'ta. */
     @Suppress("DEPRECATION")
     private fun resolve(uri: Uri): File {
-        val f = File("/" + uri.path.orEmpty().removePrefix("/")).canonicalFile
-        val root = Environment.getExternalStorageDirectory().canonicalPath
-        if (f.path != root && !f.path.startsWith("$root/")) throw FileNotFoundException("outside storage")
-        if (!f.isFile) throw FileNotFoundException("not a file")
-        return f
+        val root = Environment.getExternalStorageDirectory()
+        return Native.resolveInside(root, "/" + uri.path.orEmpty().removePrefix("/"))
+            ?: throw FileNotFoundException("outside storage or not a file")
     }
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {

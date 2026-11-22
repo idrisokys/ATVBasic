@@ -1,0 +1,23 @@
+[package]
+name = "atvnative"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Paylaşım protokolü: MyL ve Plan ile ORTAK çekirdek (bağımlılıksız, yalnızca std)
+qshare_core = { path = "../qshare_core" }
+jni = "0.21"
+# Yalnızca duvar kağıdı için: PNG/JPEG/WebP/GIF/BMP çözme, JPEG yazma
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+# JNI sınırında catch_unwind kullanıldığı için panic = "abort" YAPMAYIN.
+panic = "unwind"

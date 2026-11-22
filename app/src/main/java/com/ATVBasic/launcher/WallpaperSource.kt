@@ -1,41 +1,38 @@
 package com.ATVBasic.launcher
 
 import android.content.Context
-import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.Random
 
 /**
  * Wallpaper source: Wallhaven nature pictures (no API key needed). 16:9, at least Full HD,
- * most-favorited first, SFW only. One listing page (about 24 pictures) is cached in memory for
- * 60 min, so a 60 s slideshow rarely repeats a picture and stays far below the rate limit.
+ * most-favorited first, SFW only. One listing page (about 24 pictures) is cached for 60 min,
+ * so a 60 s slideshow rarely repeats a picture and stays far below the rate limit.
  * When Wallhaven is unreachable, a random Picsum photo is used instead.
+ *
+ * The logic lives in Rust ([Native.wpListingUrl], [Native.wpPoolLoad], [Native.wpNext], [Native.wpImport]):
+ * the search URL, JSON parsing, the shuffled address pool with its 60 min lifetime, and image scaling.
+ * Only the HTTPS transfer stays here (Rust's standard library has no TLS).
  */
 internal object WallpaperSource {
 
-    private const val POOL_TTL_MS = 60 * 60_000L
-    private const val MAX_IMAGE_BYTES = 8L * 1024 * 1024
     private const val MAX_JSON_BYTES = 2L * 1024 * 1024
     private const val USER_AGENT = "Mozilla/5.0 (Linux; Android TV) ATVBasic/4.0 (wallpaper launcher)"
 
-    private val random = Random()
-    private val pool = ArrayList<String>()
-    private var poolTime = 0L
-
     /** Blocking. Downloads one picture and installs it as the wallpaper. */
     fun fetchAndSet(ctx: Context): Boolean {
+        if (!Native.ok) return false
         val tmp = File(ctx.cacheDir, "wp_download.tmp")
         try {
             for (attempt in 0 until 3) {
                 val url = nextWallhavenUrl() ?: break
                 if (download(url, tmp)) return WallpaperStore.importFile(ctx, tmp)
             }
-            val fallback = "https://picsum.photos/1920/1080.jpg?random=" + System.currentTimeMillis()
-            if (download(fallback, tmp)) return WallpaperStore.importFile(ctx, tmp)
+            val fallback = Native.wpFallbackUrl()
+            if (fallback != null && download(fallback, tmp)) return WallpaperStore.importFile(ctx, tmp)
         } catch (ex: Exception) {
             // reported by the caller as a failure
         } catch (ex: OutOfMemoryError) {
@@ -46,37 +43,14 @@ internal object WallpaperSource {
         return false
     }
 
-    /** Takes one URL from the cached pool, (re)loading it when empty or older than 60 min. */
+    /** Takes one URL from the Rust pool; when it is empty or older than 60 min a fresh listing is fetched and loaded. */
     @Synchronized
     private fun nextWallhavenUrl(): String? {
-        if (pool.isEmpty() || System.currentTimeMillis() - poolTime > POOL_TTL_MS) {
-            val fresh = try {
-                listing()
-            } catch (ex: Exception) {
-                emptyList()
-            }
-            pool.clear()
-            pool.addAll(fresh.shuffled())
-            poolTime = System.currentTimeMillis()
-        }
-        return if (pool.isEmpty()) null else pool.removeAt(pool.size - 1)
-    }
-
-    @Throws(Exception::class)
-    private fun listing(): List<String> {
-        val q = "https://wallhaven.cc/api/v1/search?categories=100&purity=100" +
-            "&q=nature&atleast=1920x1080&ratios=16x9" +
-            "&sorting=favorites&order=desc&page=" + (1 + random.nextInt(5))
-        val data = JSONObject(getText(q)).getJSONArray("data")
-        val list = ArrayList<String>()
-        for (i in 0 until data.length()) {
-            val item = data.getJSONObject(i)
-            // Originals are downloaded as they are: skip the very big ones (slow, memory hungry).
-            if (item.optLong("file_size") > MAX_IMAGE_BYTES) continue
-            val path = item.optString("path")
-            if (path.startsWith("https://")) list.add(path)
-        }
-        return list
+        Native.wpNext()?.let { return it }
+        val q = Native.wpListingUrl() ?: return null
+        val body = try { getText(q) } catch (ex: Exception) { return null }
+        if ((Native.wpPoolLoad(body) ?: 0) <= 0) return null
+        return Native.wpNext()
     }
 
     // ------------------------------------------------------------------ HTTP

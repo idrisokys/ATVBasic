@@ -8,3 +8,8 @@ captures/
 .DS_Store
 *.jks
 *.keystore
+
+# Rust
+native/target/
+qshare_core/target/
+app/src/main/jniLibs/

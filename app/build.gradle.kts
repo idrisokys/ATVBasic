@@ -10,8 +10,10 @@ android {
         applicationId = "io.github.idrisokys.atvbasic"
         minSdk = 26
         targetSdk = 37
-        versionCode = 34
-        versionName = "4.0.0"
+        versionCode = 35
+        versionName = "5.0.0"
+        // Rust yerel kütüphanesi (native/): Android TV kutularının çoğu 32 bit (armeabi-v7a) olduğundan ikisi de derlenir.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     // Optional stable release signing. Without it the debug key is used, and a debug key that is
@@ -58,6 +60,34 @@ android {
     }
 }
 
-// No third-party dependencies: only the Android framework and the Kotlin standard library.
+// ---- Rust yerel kütüphanesi (native/ → libatvnative.so) ----
+// Arayüz dışındaki iş mantığı (paylaşım, dosya listeleme, duvar kağıdı işleme) Rust'tadır; yedek Kotlin kodu YOKTUR.
+// cargo-ndk derleme öncesi .so'ları src/main/jniLibs altına koyar. CI ortamında (CI=true) cargo-ndk zorunludur;
+// yerelde yoksa görev atlanır, APK yine derlenir ama paylaşım ve duvar kağıdı özellikleri çalışmaz (Native.ok == false).
+val rustAbis = listOf("arm64-v8a", "armeabi-v7a")
+val isCi = providers.environmentVariable("CI").isPresent
+
+fun hasCargoNdk(): Boolean = try {
+    ProcessBuilder("cargo", "ndk", "--version").redirectErrorStream(true).start().waitFor() == 0
+} catch (e: Exception) { false }
+
+val buildRust by tasks.registering(Exec::class) {
+    group = "build"
+    description = "native/ Rust kütüphanesini ${rustAbis.joinToString()} için derler"
+    workingDir = rootProject.file("native")
+    commandLine(
+        listOf("cargo", "ndk") + rustAbis.flatMap { listOf("-t", it) } +
+            listOf("-o", file("src/main/jniLibs").absolutePath, "build", "--release"),
+    )
+    onlyIf {
+        val ok = hasCargoNdk()
+        if (!ok && isCi) throw GradleException("cargo-ndk bulunamadı: `cargo install cargo-ndk --locked` (ve rustup target add aarch64-linux-android armv7-linux-androideabi)")
+        if (!ok) logger.warn("cargo-ndk yok: Rust kütüphanesi derlenmedi; paylaşım ve duvar kağıdı çalışmaz.")
+        ok
+    }
+}
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(buildRust) }
+
+// Rust dışında üçüncü parti kütüphane yoktur: yalnızca Android framework'ü ve Kotlin standart kütüphanesi.
 dependencies {
 }

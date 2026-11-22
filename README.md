@@ -70,7 +70,29 @@ Gereksiz hiçbir şey yok: duvar kağıdı, saat, tarih ve favori uygulamaların
 | compileSdk / targetSdk | 37 (Android 17) |
 | minSdk | 26 (Android 8.0) |
 
-Üçüncü parti kütüphane yoktur; yalnızca Android framework ve Kotlin standart kütüphanesi kullanılır.
+Kotlin tarafında üçüncü parti kütüphane yoktur; yalnızca Android framework ve Kotlin standart kütüphanesi kullanılır.
+Arayüz dışındaki iş mantığı Rust'tadır (aşağıya bakın).
+
+### Rust yerel kütüphanesi (`native/` → `libatvnative.so`)
+
+Arayüz (ana ekran, simgeler, dock, menüler) Kotlin'de kalır; geri kalan iş mantığı Rust'a taşındı. **Yedek Kotlin kodu yoktur**:
+kütüphane yüklenemezse launcher açılır ama paylaşım ve duvar kağıdı özellikleri çalışmaz (`Native.ok == false`).
+
+| Alan | Rust | Kotlin'de kalan (yalnızca Android API'siyle yapılabilenler) |
+| --- | --- | --- |
+| Alma sunucusu | `qshare_core::share::server` (HTTP, `.part` → yeniden adlandırma, ad temizleme, `ad_1.uzantı`) | `ShareService`: mDNS duyurusu (NsdManager), bildirim, Wi-Fi/CPU kilidi, MediaStore (Android 10) |
+| Gönderme | `sender.rs` + `qshare_core::share::client` (cihaz başına iş parçacığı, açık dosya tanıtıcısından `pread`) | `ShareSendService`: cihaz bulma (NsdManager), `content://` → tanıtıcı, bildirim |
+| Dosya seçici | `files.rs` (listeleme, kök dışına çıkmayı engelleyen yol çözümleme) | `FilePickActivity` arayüzü, `OpenProvider` |
+| Duvar kağıdı | `wallpaper.rs` + `json.rs` (arama yanıtı ayrıştırma, adres havuzu, ölçekleme, JPEG yazma) | HTTPS aktarımı (Rust std'de TLS yok), `WallpaperManager`, MediaStore |
+
+**MyL ile paylaşım:** alma/gönderme kodu MyL ve Plan (macOS) ile aynı `qshare_core` crate'idir (`qshare_core/` klasörü MyL deposundakinin kopyasıdır).
+Tel biçimi (`POST /u`, `X-Name`, `Content-Length`) ve mDNS kaydı (`_qshare._tcp.`, `n` / `i` öznitelikleri) aynıdır; ATV Basic ile MyL
+birbirine dosya gönderir ve alır. MyL'nin Link/Download eşitlemesi ATV Basic'te kapalıdır (sunucu bu uç noktalara 500 döner).
+Aynı adlı dosya gelirse üzerine yazılmaz, MyL'deki gibi `ad_1.uzantı` olarak kaydedilir.
+
+Derleme: `rustup target add aarch64-linux-android armv7-linux-androideabi`, `cargo install cargo-ndk --locked`, `ANDROID_NDK_HOME` ayarlı olsun;
+`gradle assembleRelease` içindeki `buildRust` görevi `.so`'ları (arm64-v8a + armeabi-v7a) üretir. CI'da (`CI=true`) cargo-ndk yoksa derleme durur.
+Testler: `cd qshare_core && cargo test --release` ve `cd native && cargo test --release`.
 
 Yerelde derlemek için: `gradle wrapper --gradle-version 9.6.0` komutunu bir kez çalıştırıp
 `./gradlew assembleRelease` kullan (ya da projeyi Android Studio ile aç).

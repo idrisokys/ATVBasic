@@ -5,10 +5,6 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Matrix
-import android.graphics.Paint
 import android.media.MediaScannerConnection
 import android.os.Build
 import android.os.Environment
@@ -21,7 +17,11 @@ import java.io.InputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-/** Keeps one screen-sized JPEG in app storage; nothing is held in memory while hidden. */
+/**
+ * Keeps one screen-sized JPEG in app storage; nothing is held in memory while hidden.
+ * Scaling, JPEG writing and the change stamp are done in Rust ([Native.wpImport], [Native.wpStamp]);
+ * Android-only parts (decoding for display, MediaStore) stay here.
+ */
 internal object WallpaperStore {
 
     private const val MAX_INPUT_BYTES = 40L * 1024 * 1024
@@ -33,11 +33,7 @@ internal object WallpaperStore {
     fun file(c: Context): File = File(c.filesDir, "wallpaper.jpg")
 
     /** A value that changes whenever the wallpaper changes, or 0 when there is none. */
-    fun stamp(c: Context): Long {
-        val f = file(c)
-        if (!f.isFile) return 0L
-        return maxOf(1L, f.lastModified() * 31 + f.length())
-    }
+    fun stamp(c: Context): Long = Native.wpStamp(file(c)) ?: 0L
 
     /** Decodes the saved wallpaper (RGB_565, screen-sized) or returns null. */
     fun load(c: Context): Bitmap? {
@@ -51,68 +47,16 @@ internal object WallpaperStore {
         }
     }
 
-    /** Largest power-of-two sample size that still leaves the picture at least target-sized. */
-    fun sampleSize(w: Int, h: Int, targetW: Int, targetH: Int): Int {
-        var sample = 1
-        while (w / (sample * 2) >= targetW && h / (sample * 2) >= targetH) sample *= 2
-        return sample
-    }
-
     /**
-     * Scales {@code src} to the screen size, saves it as the wallpaper and deletes {@code src}.
+     * Scales [src] to the screen size (in Rust), saves it as the wallpaper and deletes [src].
      * With [fit] the whole picture is kept (no cropping) and centred on black; otherwise it fills
      * the screen and is cropped. Returns false when the picture cannot be decoded.
      */
-    @Throws(IOException::class)
     fun importFile(c: Context, src: File, fit: Boolean = false): Boolean {
-        var tmpOut: File? = null
-        try {
-            val dm = c.resources.displayMetrics
-            // 1080p is plenty for a wallpaper and keeps memory low on 4K TVs (the view scales it up).
-            val tw = minOf(maxOf(dm.widthPixels, dm.heightPixels), 1920)
-            val th = minOf(minOf(dm.widthPixels, dm.heightPixels), 1080)
-
-            val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(src.path, o)
-            if (o.outWidth <= 0 || o.outHeight <= 0) return false
-
-            o.inJustDecodeBounds = false
-            o.inSampleSize = sampleSize(o.outWidth, o.outHeight, tw, th)
-            o.inPreferredConfig = Bitmap.Config.RGB_565
-            val decoded = BitmapFactory.decodeFile(src.path, o) ?: return false
-
-            val out = Bitmap.createBitmap(tw, th, Bitmap.Config.RGB_565)
-            try {
-                val sx = tw / decoded.width.toFloat()
-                val sy = th / decoded.height.toFloat()
-                val s = if (fit) minOf(sx, sy) else maxOf(sx, sy)
-                val m = Matrix()
-                m.postScale(s, s)
-                m.postTranslate((tw - decoded.width * s) / 2f, (th - decoded.height * s) / 2f)
-                val canvas = Canvas(out)
-                if (fit) canvas.drawColor(Color.BLACK)
-                canvas.drawBitmap(decoded, m, Paint(Paint.FILTER_BITMAP_FLAG))
-            } finally {
-                decoded.recycle()
-            }
-
-            val tmp = File.createTempFile("wallpaper", ".tmp", c.filesDir)
-            tmpOut = tmp
-            val written = try {
-                FileOutputStream(tmp).use { out.compress(Bitmap.CompressFormat.JPEG, 88, it) }
-            } finally {
-                out.recycle()
-            }
-            if (!written) return false
-
-            val renamed = synchronized(lock) { tmp.renameTo(file(c)) }
-            if (renamed) tmpOut = null
-            return renamed
-        } catch (ex: OutOfMemoryError) {
-            return false
-        } finally {
-            tmpOut?.delete()
-            src.delete()
+        val dm = c.resources.displayMetrics
+        // Serialised, so a slideshow download and a "share as wallpaper" never collide on the same file.
+        return synchronized(lock) {
+            Native.wpImport(src, file(c), dm.widthPixels, dm.heightPixels, fit) ?: run { src.delete(); false }
         }
     }
 

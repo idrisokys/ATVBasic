@@ -15,26 +15,23 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.os.SystemClock
 import android.provider.OpenableColumns
+import android.system.Os
+import android.system.OsConstants
 import android.webkit.MimeTypeMap
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.InputStream
 import java.net.Inet4Address
 import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.Socket
-import java.net.URLEncoder
 import java.util.UUID
-import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.thread
 
 /**
- * Gönderim. Dosya yöneticisinden "Paylaş" ile gelen dosyaları, aynı ağda şu an paylaşımı AÇIK olan
- * (mDNS ile "_qshare._tcp." duyuran) tüm cihazlara otomatik gönderir. Cihaz seçme ekranı yoktur.
- * Protokol [ShareService] ile aynıdır: POST + Content-Length + X-Name başlığı.
+ * Gönderim. Dosya yöneticisinden "Paylaş" ile (ya da launcher'ın kendi seçicisinden) gelen dosyaları, aynı ağda şu an
+ * paylaşımı AÇIK olan (mDNS ile "_qshare._tcp." duyuran: MyL, Plan, ATV Basic…) tüm cihazlara otomatik gönderir.
+ *
+ * Gönderimin kendisi Rust'tadır ([Native.sendStart] → `qshare_core` istemcisi; MyL ile aynı tel biçimi). Burada yalnızca
+ * Android'e özgü işler kalır: dosya adresi → ad + açık tanıtıcı, NsdManager ile cihaz bulma, bildirim.
  */
 class ShareSendService : Service() {
 
@@ -44,13 +41,13 @@ class ShareSendService : Service() {
         private const val NOTIF_ID = 2
         private const val DISCOVER_MS = 6_000L       // cihaz arama süresi
         private const val WATCHDOG_MS = 16_000L      // çözümleme takılırsa zorla bitir
-        private const val BUF = 1 shl 20          // MyL ile aynı: 1 MB okuma/yazma tamponu
+        private const val MAX_FDS = 200              // açık dosya tanıtıcısı sınırı (aşan dosyalar önce kopyalanır)
 
         private const val EXTRA_PATHS = "paths"
 
         /** Dosya yolları (launcher'ın kendi seçicisi) ile gönderim başlatır. */
         fun startPaths(c: Context, paths: List<String>): Boolean {
-            if (paths.isEmpty()) return false
+            if (paths.isEmpty() || !Native.ok) return false
             return try {
                 val i = Intent(c, ShareSendService::class.java)
                     .putStringArrayListExtra(EXTRA_PATHS, ArrayList(paths))
@@ -63,7 +60,7 @@ class ShareSendService : Service() {
 
         /** Verilen dosyaları açık cihazlara göndermek için servisi başlatır. */
         fun start(c: Context, uris: List<Uri>): Boolean {
-            if (uris.isEmpty()) return false
+            if (uris.isEmpty() || !Native.ok) return false
             return try {
                 val i = Intent(c, ShareSendService::class.java)
                 val clip = ClipData.newRawUri("files", uris[0])
@@ -78,11 +75,8 @@ class ShareSendService : Service() {
         }
     }
 
-    private class Item(val name: String, val size: Long, val uri: Uri?, val file: File?)
-
     private val main = Handler(Looper.getMainLooper())
     private var jobs = 0
-    private var lastProgress = 0L
 
     private val nb by lazy {
         Notification.Builder(this, CH)
@@ -117,7 +111,8 @@ class ShareSendService : Service() {
             for (k in 0 until clip.itemCount) clip.getItemAt(k).uri?.let { uris.add(it) }
         }
         intent?.getStringArrayListExtra(EXTRA_PATHS)?.forEach { uris.add(Uri.fromFile(File(it))) }
-        if (uris.isEmpty()) {
+        if (uris.isEmpty() || !Native.ok) {
+            if (!Native.ok) Notice.show(this, getString(R.string.notice_send_failed))
             stopSelf()
             return START_NOT_STICKY
         }
@@ -132,30 +127,25 @@ class ShareSendService : Service() {
     private inner class Job(private val uris: List<Uri>) {
         private val lock = Any()
         private val nsd = getSystemService(Context.NSD_SERVICE) as NsdManager
-        private val ready = CountDownLatch(1)
-        private val items = ArrayList<Item>()
         private val seen = HashSet<String>()
         private val pending = java.util.ArrayDeque<NsdServiceInfo>()
+        private val early = ArrayList<Pair<String, String>>() // dosyalar hazır olmadan bulunan cihazlar: (ad, "ip:port")
         private var listener: NsdManager.DiscoveryListener? = null
 
+        private var send: Native.SendJob? = null   // dosyalar hazır olunca oluşur
+        private var items: List<Native.SendItem> = emptyList()
         private var resolving = false
         private var discovering = true
+        private var closed = false
         private var finished = false
-        private var active = 0       // yürüyen cihaz gönderimleri
-        private var devOk = 0
-        private var devFail = 0
 
         private val ownId: String? =
             getSharedPreferences(Prefs.FILE, MODE_PRIVATE).getString(Prefs.SHARE_ID, null)
         private val ownName: String? = ownId?.let { "QS" + it.take(10) }
 
         fun run() {
-            // Dosya bilgileri (ad, boyut) arka planda hazırlanır; cihaz arama bunu beklemez.
-            thread(isDaemon = true, name = "send-prepare") {
-                prepare()
-                ready.countDown()
-                if (items.isEmpty()) finish()
-            }
+            // Dosya bilgileri (ad, tanıtıcı) arka planda hazırlanır; cihaz arama bunu beklemez.
+            thread(isDaemon = true, name = "send-prepare") { prepareAndStart() }
             startDiscovery()
             main.postDelayed({ stopDiscovery() }, DISCOVER_MS)
             main.postDelayed({
@@ -164,31 +154,74 @@ class ShareSendService : Service() {
                     pending.clear()
                     resolving = false
                 }
-                maybeFinish()
+                maybeClose()
             }, WATCHDOG_MS)
         }
 
         // -------------------------------------------------------------- files
 
-        private fun prepare() {
+        private fun prepareAndStart() {
+            val list = ArrayList<Native.SendItem>()
+            var fds = 0
             for (u in uris) {
                 try {
-                    val name = displayName(u)
-                    val size = lengthOf(u)
-                    if (size >= 0) {
-                        items.add(Item(name, size, u, null))
-                    } else {
-                        // Boyut bilinmiyorsa Content-Length için önce geçici dosyaya kopyalanır.
-                        val dir = File(cacheDir, "send").apply { mkdirs() }
-                        val tmp = File(dir, UUID.randomUUID().toString())
-                        val input = contentResolver.openInputStream(u) ?: continue
-                        input.use { src -> FileOutputStream(tmp).use { src.copyTo(it, BUF) } }
-                        items.add(Item(name, tmp.length(), null, tmp))
-                    }
+                    val item = describe(u, fds < MAX_FDS) ?: continue
+                    if (item.fd >= 0) fds++
+                    list.add(item)
                 } catch (e: Exception) {
                     // bu dosya atlanır
                 }
             }
+            items = list
+            val job = Native.sendStart(list)
+            if (job == null) {
+                Native.closeFds(list)
+                items = emptyList()
+                finish(false)
+                return
+            }
+            val queued: List<Pair<String, String>>
+            synchronized(lock) {
+                send = job
+                queued = ArrayList(early)
+                early.clear()
+            }
+            for ((n, a) in queued) Native.sendPeer(job, n, a)
+            thread(isDaemon = true, name = "send-events") { eventLoop(job) }
+            maybeClose()
+        }
+
+        /**
+         * Bir adresi gönderilebilir hale getirir. Düz dosya (`file:` ya da düz bir dosyaya açılan `content:`) açık
+         * tanıtıcı olarak Rust'a verilir; Rust `pread` ile okur. Boyutu bilinmeyen / aranamayan kaynaklar
+         * (boru, gömülü ofset) önce geçici dosyaya kopyalanır.
+         */
+        private fun describe(u: Uri, allowFd: Boolean): Native.SendItem? {
+            val name = displayName(u)
+            if (u.scheme == "file") {
+                val f = File(u.path ?: return null)
+                return if (f.isFile) Native.SendItem(name, f.path, -1, f.length()) else null
+            }
+            if (allowFd) {
+                try {
+                    contentResolver.openAssetFileDescriptor(u, "r")?.let { afd ->
+                        val pfd = afd.parcelFileDescriptor
+                        val regular = try { OsConstants.S_ISREG(Os.fstat(pfd.fileDescriptor).st_mode) } catch (e: Exception) { false }
+                        val len = afd.length
+                        if (regular && afd.startOffset <= 0L && len >= 0L) {
+                            return Native.SendItem(name, null, pfd.detachFd(), len)
+                        }
+                        afd.close()
+                    }
+                } catch (e: Exception) {
+                    // aşağıda kopyalanır
+                }
+            }
+            val dir = File(cacheDir, "send").apply { mkdirs() }
+            val tmp = File(dir, UUID.randomUUID().toString())
+            val input = contentResolver.openInputStream(u) ?: return null
+            input.use { src -> FileOutputStream(tmp).use { src.copyTo(it, 1 shl 20) } }
+            return Native.SendItem(name, tmp.path, -1, tmp.length())
         }
 
         private fun displayName(u: Uri): String {
@@ -208,25 +241,23 @@ class ShareSendService : Service() {
             return n
         }
 
-        private fun lengthOf(u: Uri): Long {
-            try {
-                contentResolver.openAssetFileDescriptor(u, "r")?.use {
-                    if (it.length >= 0) return it.length
-                }
-            } catch (e: Exception) { }
-            try {
-                contentResolver.query(u, arrayOf(OpenableColumns.SIZE), null, null, null)?.use {
-                    if (it.moveToFirst() && !it.isNull(0)) {
-                        val s = it.getLong(0)
-                        if (s >= 0) return s
-                    }
-                }
-            } catch (e: Exception) { }
-            return -1L
-        }
+        // -------------------------------------------------------------- Rust olayları
 
-        private fun open(item: Item): InputStream? =
-            if (item.file != null) FileInputStream(item.file) else contentResolver.openInputStream(item.uri!!)
+        private fun eventLoop(job: Native.SendJob) {
+            var ok = 0
+            while (true) {
+                val ev = Native.sendPoll(job) ?: break
+                if (ev.size < 4) continue
+                when (ev[0]) {
+                    Native.SEND_PROGRESS -> {
+                        val pct = ev[3].toIntOrNull() ?: 0
+                        progress(getString(R.string.send_sending, ev[1], ev[2]), pct) // Rust en çok ~4/sn bildirir
+                    }
+                    Native.SEND_DONE -> ok = ev[1].toIntOrNull() ?: 0
+                }
+            }
+            finish(ok > 0 && items.isNotEmpty())
+        }
 
         // -------------------------------------------------------------- discovery
 
@@ -234,7 +265,7 @@ class ShareSendService : Service() {
             val l = object : NsdManager.DiscoveryListener {
                 override fun onStartDiscoveryFailed(t: String?, e: Int) {
                     synchronized(lock) { discovering = false }
-                    maybeFinish()
+                    maybeClose()
                 }
                 override fun onStopDiscoveryFailed(t: String?, e: Int) {}
                 override fun onDiscoveryStarted(t: String?) {}
@@ -244,7 +275,7 @@ class ShareSendService : Service() {
                     if (s == null) return
                     if (ownName != null && s.serviceName == ownName) return
                     val fresh = synchronized(lock) {
-                        if (finished || !discovering) false
+                        if (closed || !discovering) false
                         else if (seen.add(s.serviceName)) { pending.add(s); true } else false
                     }
                     if (fresh) pump()
@@ -255,14 +286,14 @@ class ShareSendService : Service() {
                 nsd.discoverServices(TYPE, NsdManager.PROTOCOL_DNS_SD, l)
             } catch (e: Exception) {
                 synchronized(lock) { discovering = false }
-                maybeFinish()
+                maybeClose()
             }
         }
 
         private fun stopDiscovery() {
             try { listener?.let { nsd.stopServiceDiscovery(it) } } catch (e: Exception) { }
             synchronized(lock) { discovering = false }
-            maybeFinish()
+            maybeClose()
         }
 
         /** NsdManager aynı anda tek çözümlemeye izin verir; sırayla çözülür. */
@@ -271,7 +302,7 @@ class ShareSendService : Service() {
                 if (resolving) null else pending.poll()?.also { resolving = true }
             }
             if (next == null) {
-                maybeFinish()
+                maybeClose()
                 return
             }
             try {
@@ -298,22 +329,14 @@ class ShareSendService : Service() {
             val id = attr(i, "i")
             if (id != null && id == ownId) return
             val name = attr(i, "n") ?: i.serviceName
-            val addr = pickAddress(i) ?: return
-            val port = i.port
-            if (port <= 0) return
-
+            val addr = formatAddr(pickAddress(i) ?: return, i.port) ?: return
+            val job: Native.SendJob?
             synchronized(lock) {
-                if (finished) return
-                active++
+                if (closed) return
+                job = send
+                if (job == null) early.add(name to addr)
             }
-            thread(isDaemon = true, name = "send-$name") {
-                val ok = try { sendAll(addr, port, name) } catch (e: Exception) { false }
-                synchronized(lock) {
-                    active--
-                    if (ok) devOk++ else devFail++
-                }
-                maybeFinish()
-            }
+            if (job != null) Native.sendPeer(job, name, addr)
         }
 
         @Suppress("DEPRECATION")
@@ -325,92 +348,39 @@ class ShareSendService : Service() {
             return i.host
         }
 
-        // -------------------------------------------------------------- sending
-
-        private fun sendAll(addr: InetAddress, port: Int, dev: String): Boolean {
-            ready.await()
-            if (items.isEmpty()) return false
-            var all = true
-            for (item in items) {
-                val ok = try { sendOne(addr, port, item, dev) } catch (e: Exception) { false }
-                if (!ok) all = false
-            }
-            return all
-        }
-
-        private fun sendOne(addr: InetAddress, port: Int, item: Item, dev: String): Boolean {
-            val src = open(item) ?: return false
-            return src.use { input ->
-                Socket().use { s ->
-                    s.sendBufferSize = 4 shl 20
-                    s.tcpNoDelay = true
-                    s.connect(InetSocketAddress(addr, port), 5_000)
-                    s.soTimeout = 30_000
-                    val out = s.getOutputStream()
-                    val head = "POST /u HTTP/1.1\r\n" +
-                        "Host: ${addr.hostAddress}:$port\r\n" +
-                        "Content-Type: application/octet-stream\r\n" +
-                        "Content-Length: ${item.size}\r\n" +
-                        "X-Name: ${URLEncoder.encode(item.name, "UTF-8")}\r\n" +
-                        "Connection: close\r\n\r\n"
-                    out.write(head.toByteArray(Charsets.US_ASCII))
-
-                    val buf = ByteArray(BUF)
-                    var sent = 0L
-                    var last = -1
-                    while (sent < item.size) {
-                        val want = minOf(buf.size.toLong(), item.size - sent).toInt()
-                        val n = input.read(buf, 0, want)
-                        if (n < 0) return false
-                        out.write(buf, 0, n)
-                        sent += n
-                        val p = if (item.size > 0) (sent * 100 / item.size).toInt() else 100
-                        if (p != last) {
-                            last = p
-                            progress(getString(R.string.send_sending, item.name, dev), p)
-                        }
-                    }
-                    out.flush()
-
-                    // Alıcı, dosya diske tamamen yazılınca "200 OK" döner.
-                    val status = readLine(s.getInputStream())
-                    status.startsWith("HTTP/") && status.contains(" 200")
-                }
-            }
-        }
-
-        private fun readLine(i: InputStream): String {
-            val sb = StringBuilder()
-            while (sb.length < 8192) {
-                val c = i.read()
-                if (c < 0 || c == 10) break
-                if (c != 13) sb.append(c.toChar())
-            }
-            return sb.toString()
+        /** Rust'a verilen "ip:port". IPv6'da köşeli parantez gerekir; bağlantı-yerel (kapsam gerektiren) adresler atlanır. */
+        private fun formatAddr(a: InetAddress, port: Int): String? {
+            if (port <= 0) return null
+            val host = a.hostAddress?.substringBefore('%') ?: return null
+            if (a is Inet4Address) return "$host:$port"
+            return if (a.isLinkLocalAddress) null else "[$host]:$port"
         }
 
         // -------------------------------------------------------------- end
 
-        private fun maybeFinish() {
-            val fin = synchronized(lock) {
-                if (finished || discovering || resolving || pending.isNotEmpty() || active > 0) {
-                    false
-                } else {
-                    finished = true
-                    true
-                }
+        /** Arama ve çözümleme bitince Rust'a "başka cihaz eklenmeyecek" der; tüm gönderimler bitince "bitti" olayı gelir. */
+        private fun maybeClose() {
+            val job: Native.SendJob
+            val flush: List<Pair<String, String>>
+            synchronized(lock) {
+                if (closed || discovering || resolving || pending.isNotEmpty()) return
+                job = send ?: return // dosyalar hazır değil: hazır olunca [prepareAndStart] yeniden dener
+                closed = true
+                flush = ArrayList(early)
+                early.clear()
             }
-            if (fin) finish()
+            for ((n, a) in flush) Native.sendPeer(job, n, a)
+            Native.sendClose(job)
         }
 
-        private fun finish() {
+        private fun finish(ok: Boolean) {
             synchronized(lock) {
-                if (!finished) finished = true
+                if (finished) return
+                finished = true
             }
             try { File(cacheDir, "send").deleteRecursively() } catch (e: Exception) { }
             try { listener?.let { nsd.stopServiceDiscovery(it) } } catch (e: Exception) { }
-
-            val msg = getString(if (items.isNotEmpty() && devOk > 0) R.string.notice_sent else R.string.notice_send_failed)
+            val msg = getString(if (ok) R.string.notice_sent else R.string.notice_send_failed)
             main.post {
                 Notice.show(applicationContext, msg)
                 if (--jobs <= 0) stopSelf()
@@ -421,9 +391,6 @@ class ShareSendService : Service() {
     // ------------------------------------------------------------------ notification
 
     private fun progress(text: String, pct: Int) {
-        val now = SystemClock.elapsedRealtime()
-        if (pct < 100 && now - lastProgress < 250) return
-        lastProgress = now
         try {
             val n = nb.setContentText(text).setProgress(100, pct, false).build()
             getSystemService(NotificationManager::class.java).notify(NOTIF_ID, n)

@@ -29,6 +29,27 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
+      # Rust yerel kütüphanesi (native/): cargo-ndk, runner'daki hazır Android NDK'yı kullanır
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            native
+            qshare_core
+
+      - name: cargo-ndk kur
+        run: cargo install cargo-ndk --locked
+
+      # Ortak çekirdek (MyL ve Plan ile aynı kod): sunucu + istemci aynı süreçte 127.0.0.1 üzerinden uçtan uca denenir
+      - name: Ortak çekirdek testleri (qshare_core/)
+        run: (cd qshare_core && cargo test --release)
+
+      - name: Rust testleri (native/)
+        run: (cd native && cargo test --release)
+
       # Pinned to the Gradle version AGP 9.5 requires, so builds stay reproducible.
       - uses: gradle/actions/setup-gradle@v4
         with:

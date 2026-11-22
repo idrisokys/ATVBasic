@@ -20,29 +20,20 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
-import android.os.SystemClock
 import android.provider.MediaStore
 import android.provider.Settings
 import android.webkit.MimeTypeMap
-import java.io.BufferedInputStream
 import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStream
-import java.io.OutputStream
-import java.net.InetSocketAddress
-import java.net.ServerSocket
-import java.net.Socket
-import java.net.URLDecoder
 import java.util.UUID
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
  * Paylaşım. Açıkken bu cihaz ağda QuickShare cihazı olarak görünür (mDNS) ve gelen dosyaları
- * İndirilenler (Download) klasörüne kaydeder. Arayüzü yoktur: ana ekrandaki paylaşım simgesi
- * servisi açar / kapatır.
+ * İndirilenler (Download) klasörüne kaydeder. Arayüzü yoktur: ana ekrandaki paylaşım simgesi servisi açar / kapatır.
+ *
+ * Alma sunucusu Rust'tadır ([Native.serverStart]; MyL ve Plan ile ORTAK `qshare_core`): HTTP ayrıştırma, dosyayı
+ * `.part` olarak yazma, ad temizleme, aynı ad için `ad_1.uzantı`. Burada yalnızca Android'e özgü işler kalır:
+ * mDNS duyurusu (NsdManager), bildirimler, Wi-Fi/CPU kilitleri, depolama izni ve MediaStore.
  */
 class ShareService : Service() {
 
@@ -55,11 +46,7 @@ class ShareService : Service() {
         private const val TYPE = "_qshare._tcp."
         private const val CH_RUN = "share_run"
         private const val CH_RECV = "share_recv"
-        // TCP soket tamponu: 5 GHz Wi-Fi için geniş pencere; sistem kendi üst sınırına kırpar.
-        private const val BUF = 4 shl 20
-        private const val CH = 512 * 1024      // ağ okuma ile disk yazmayı ayıran tampon parçası
-        // 16 x 512 KB = 8 MB: TV flash belleğinin kısa yazma duraklamalarında (GC) ağ beklemesin. Tamponlar gerektikçe ayrılır.
-        private const val SLOTS = 16
+        private const val PORT_KEY = "share_port"
 
         private val main = Handler(Looper.getMainLooper())
 
@@ -71,12 +58,15 @@ class ShareService : Service() {
             prefs(c).edit().putBoolean(Prefs.SHARE_ON, on).apply()
         }
 
-        /** Servisi başlatır; arka plan kısıtı vb. yüzünden başlatılamazsa false döner. */
-        fun start(c: Context): Boolean = try {
-            c.startForegroundService(Intent(c, ShareService::class.java))
-            true
-        } catch (e: Exception) {
-            false
+        /** Servisi başlatır; yerel kütüphane yoksa ya da arka plan kısıtı vb. yüzünden başlatılamazsa false döner. */
+        fun start(c: Context): Boolean {
+            if (!Native.ok) return false
+            return try {
+                c.startForegroundService(Intent(c, ShareService::class.java))
+                true
+            } catch (e: Exception) {
+                false
+            }
         }
 
         fun stop(c: Context) {
@@ -88,16 +78,14 @@ class ShareService : Service() {
         }
     }
 
-    private class Chunk(val b: ByteArray, val n: Int) // n < 0: bitti işareti
-
-    private class Sink(val out: OutputStream, val commit: () -> Boolean, val abort: () -> Unit, val root: Boolean = true)
-
     private val ui = Handler(Looper.getMainLooper())
     private val backToWaiting = Runnable { show(getString(R.string.qs_notif_waiting), -1) }
-    private var server: ServerSocket? = null
+    private var server: Native.Server? = null
     private var nsd: NsdManager? = null
     private var reg: NsdManager.RegistrationListener? = null
-    private var lastProgress = 0L
+
+    /** Android 10 ve izin yokken Rust'un yazdığı geçici klasör; dosyalar buradan MediaStore'a taşınır. */
+    private var inbox: File? = null
 
     private var holds = 0
     private var wifiLock: WifiManager.WifiLock? = null
@@ -134,30 +122,19 @@ class ShareService : Service() {
             startForeground(1, n)
         }
 
-        try {
-            // Tampon, bind'dan ÖNCE ayarlanmalı; yoksa büyük TCP penceresi (hız) devreye girmez.
-            // Önceki portu yeniden kullan: servis yeniden başlayınca port değişmez, karşı cihazların önbelleği geçerli kalır.
-            val sp = getSharedPreferences(Prefs.FILE, MODE_PRIVATE)
-            fun open(port: Int) = ServerSocket().apply {
-                reuseAddress = true
-                receiveBufferSize = BUF
-                bind(InetSocketAddress(port))
-            }
-            val ss = try { open(sp.getInt("share_port", 0)) } catch (e: Exception) { open(0) }
-            sp.edit().putInt("share_port", ss.localPort).apply()
-            server = ss
-            thread(isDaemon = true, name = "share-accept") {
-                while (true) {
-                    val c = try { ss.accept() } catch (e: Exception) { break }
-                    thread(isDaemon = true, name = "share-rx") { handle(c) }
-                }
-            }
-            announce(ss.localPort)
-        } catch (e: Exception) {
+        val srv = startServer()
+        if (srv == null) {
             setOn(this, false)
             stopSelf()
             return
         }
+        server = srv
+        try {
+            announce(srv.port)
+        } catch (e: Exception) {
+            android.util.Log.w("ShareService", "mDNS duyurusu başlatılamadı", e)
+        }
+        thread(isDaemon = true, name = "share-events") { eventLoop(srv) }
         running = true
         changed()
     }
@@ -167,16 +144,74 @@ class ShareService : Service() {
     override fun onDestroy() {
         running = false
         ui.removeCallbacksAndMessages(null)
-        try { server?.close() } catch (e: Exception) { }
+        server?.let { Native.serverStop(it) } // olay döngüsü null alıp kendiliğinden biter
+        server = null
         try { reg?.let { nsd?.unregisterService(it) } } catch (e: Exception) { }
         releaseAll()
         changed()
         super.onDestroy()
     }
 
+    // ------------------------------------------------------------------ Rust sunucusu
+
+    /**
+     * Rust alma sunucusunu başlatır. Önceki port yeniden denenir: servis yeniden başlayınca port değişmez,
+     * karşı cihazların önbelleği geçerli kalır; olmazsa boş port seçilir.
+     */
+    private fun startServer(): Native.Server? {
+        Native.setLang()
+        val recv = recvDir() ?: return null
+        val sp = getSharedPreferences(Prefs.FILE, MODE_PRIVATE)
+        val saved = sp.getInt(PORT_KEY, 0)
+        val s = (if (saved > 0) Native.serverStart(recv, null, null, null, saved) else null)
+            ?: Native.serverStart(recv, null, null, null, 0)
+        if (s != null) sp.edit().putInt(PORT_KEY, s.port).apply()
+        return s
+    }
+
+    /** Gelen dosyaların yazılacağı klasör: izin varsa İndirilenler, yoksa uygulamanın geçici gelen kutusu. */
+    @Suppress("DEPRECATION")
+    private fun recvDir(): File? {
+        if (canWriteRoot()) {
+            val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (dir.isDirectory || dir.mkdirs()) return dir
+        }
+        // İzin yoksa: Android 10+ dosyayı sonradan MediaStore ile İndirilenler'e taşırız; eski sürümlerde vazgeç.
+        if (Build.VERSION.SDK_INT < 29) return null
+        val box = File(filesDir, "inbox")
+        if (!box.isDirectory && !box.mkdirs()) return null
+        inbox = box
+        return box
+    }
+
+    /** Rust sunucusunun olaylarını bekler; sunucu kapanınca (null) biter. */
+    private fun eventLoop(srv: Native.Server) {
+        while (true) {
+            val ev = Native.serverPoll(srv) ?: break
+            if (ev.size < 3) continue
+            val name = ev[1]
+            when (ev[0]) {
+                Native.EV_BUSY_ON -> acquire()
+                Native.EV_BUSY_OFF -> release()
+                Native.EV_RECEIVING -> busy(getString(R.string.qs_receiving, name))
+                Native.EV_RECEIVED -> {
+                    val moved = inbox?.let { drainInbox(it) } ?: true
+                    if (inbox == null) scanSaved(ev[2], name)
+                    if (moved) {
+                        status(getString(if (inbox == null) R.string.qs_saved else R.string.qs_saved_fallback, name), -1)
+                        notifyReceived(name)
+                    } else {
+                        status(getString(R.string.qs_error), -1)
+                    }
+                }
+                Native.EV_FAILED -> status(getString(R.string.qs_partial), -1)
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ mDNS
 
-    /** Cihazı ağda duyurur; diğer QuickShare cihazları (Android, Mac) bunu görüp dosya gönderir. */
+    /** Cihazı ağda duyurur; diğer QuickShare cihazları (MyL, Plan, Android, Mac) bunu görüp dosya gönderir. */
     private fun announce(port: Int) {
         val sp = getSharedPreferences(Prefs.FILE, MODE_PRIVATE)
         val devId = sp.getString(Prefs.SHARE_ID, null)
@@ -202,113 +237,25 @@ class ShareService : Service() {
         m.registerService(info, NsdManager.PROTOCOL_DNS_SD, l)
     }
 
-    // ------------------------------------------------------------------ receiving
-
-    private fun line(i: InputStream): String {
-        val sb = StringBuilder()
-        while (sb.length < 8192) {
-            val c = i.read()
-            if (c < 0 || c == 10) break
-            if (c != 13) sb.append(c.toChar())
-        }
-        return sb.toString()
-    }
-
-    private fun reply(s: Socket, st: String) {
-        s.outputStream.write("HTTP/1.1 $st\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
-        s.outputStream.flush()
-    }
-
-    private fun handle(s: Socket) {
-        acquire()
-        try {
-            s.use {
-                s.soTimeout = 30000
-                s.tcpNoDelay = true
-                val ins = BufferedInputStream(s.inputStream, 64 * 1024)
-                line(ins)
-                var len = -1L
-                var name = "file"
-                while (true) {
-                    val l = line(ins)
-                    if (l.isEmpty()) break
-                    val k = l.substringBefore(':').lowercase()
-                    val v = l.substringAfter(':').trim()
-                    if (k == "content-length") len = v.toLongOrNull() ?: -1L
-                    else if (k == "x-name") name = URLDecoder.decode(v, "UTF-8")
-                }
-                if (len < 0) {
-                    reply(s, "400 Bad Request")
-                    return
-                }
-                val clean = name.substringAfterLast('/').substringAfterLast('\\')
-                    .replace(Regex("[\\u0000-\\u001f:*?\"<>|]"), "_").trimStart('.').take(120).ifBlank { "file" }
-
-                val sink = openSink(clean)
-                if (sink == null) {
-                    reply(s, "500 Error")
-                    status(getString(R.string.qs_error), -1)
-                    return
-                }
-
-                var ok = false
-                try {
-                    sink.out.use { out ->
-                        // Okuyucu ağdan okur, yazıcı iş parçacığı diske yazar: yavaş TV deposu ağı bekletmez.
-                        val free = ArrayBlockingQueue<ByteArray>(SLOTS)
-                        var made = 0
-                        val full = ArrayBlockingQueue<Chunk>(SLOTS + 1)
-                        val werr = AtomicBoolean(false)
-                        val wr = thread(isDaemon = true, name = "share-write") {
-                            while (true) {
-                                val c = try { full.take() } catch (e: InterruptedException) { break }
-                                if (c.n < 0) break
-                                if (!werr.get()) try { out.write(c.b, 0, c.n) } catch (e: Exception) { werr.set(true) }
-                                free.add(c.b)
-                            }
-                        }
-                        var left = len
-                        var last = -1
-                        try {
-                            while (left > 0 && !werr.get()) {
-                                val b = free.poll() ?: if (made < SLOTS) { made++; ByteArray(CH) } else (free.poll(30, TimeUnit.SECONDS) ?: break)
-                                val want = minOf(CH.toLong(), left).toInt()
-                                var fill = 0
-                                while (fill < want) {
-                                    val n = ins.read(b, fill, want - fill)
-                                    if (n < 0) break
-                                    fill += n
-                                }
-                                if (fill > 0) full.put(Chunk(b, fill)) else free.add(b)
-                                left -= fill
-                                val p = ((len - left) * 100 / len).toInt()
-                                if (p != last) {
-                                    last = p
-                                    progress(getString(R.string.qs_receiving, clean), p)
-                                }
-                                if (fill < want) break
-                            }
-                        } finally {
-                            full.put(Chunk(ByteArray(0), -1))
-                            wr.join() // bütün yazmalar bitmeden dosya kapanmaz
-                        }
-                        ok = left == 0L && !werr.get()
-                    }
-                } finally {
-                    ok = try { if (ok) sink.commit() else { sink.abort(); false } } catch (e: Exception) { false }
-                }
-                reply(s, if (ok) "200 OK" else "500 Error")
-                status(if (ok) getString(if (sink.root) R.string.qs_saved else R.string.qs_saved_fallback, clean) else getString(R.string.qs_partial), -1)
-                if (ok) notifyReceived(clean)
-            }
-        } catch (e: Exception) {
-            status(getString(R.string.qs_error), -1)
-        } finally {
-            release()
-        }
-    }
-
     // ------------------------------------------------------------------ storage: Download (İndirilenler)
+
+    /**
+     * Rust aynı adlı dosya için `ad_1.uzantı` üretebilir; olayda yalnızca özgün ad vardır. Klasörde bu adla ya da
+     * `ad_N.uzantı` biçimiyle eşleşen en yeni dosya medya tarayıcısına bildirilir (galeri/dosya yöneticisi görsün).
+     */
+    private fun scanSaved(folder: String, name: String) {
+        try {
+            val dir = File(folder)
+            val base = name.substringBeforeLast('.', name)
+            val ext = if (name.contains('.')) "." + name.substringAfterLast('.') else ""
+            val numbered = Regex(Regex.escape(base) + "_\\d+" + Regex.escape(ext))
+            val newest = dir.listFiles { f -> f.isFile && (f.name == name || numbered.matches(f.name)) }
+                ?.maxByOrNull { it.lastModified() } ?: return
+            MediaScannerConnection.scanFile(this, arrayOf(newest.path), null, null)
+        } catch (e: Exception) {
+            // tarama başarısız olsa da dosya yerinde
+        }
+    }
 
     /** İndirilenler klasörüne File API ile doğrudan yazılabilir mi? */
     @Suppress("DEPRECATION")
@@ -318,86 +265,76 @@ class ShareService : Service() {
         else -> checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun openSink(name: String): Sink? {
-        if (canWriteRoot()) rootSink(name)?.let { return it }
-        // İzin yoksa / yazılamadıysa: Android 10+ İndirilenler (MediaStore, izinsiz), eski sürümlerde vazgeç.
-        return if (Build.VERSION.SDK_INT >= 29) mediaSink(name) else null
+    /**
+     * Gelen kutusundaki TAMAMLANMIŞ dosyaları (Rust yarımları `.part` olarak yazar) MediaStore ile İndirilenler'e taşır.
+     * Hepsi taşındıysa true.
+     */
+    @SuppressLint("NewApi")
+    @Synchronized
+    private fun drainInbox(box: File): Boolean {
+        var all = true
+        val files = box.listFiles { f -> f.isFile && !f.name.endsWith(".part") } ?: return true
+        for (f in files) {
+            if (!moveToDownloads(f)) all = false
+        }
+        return all
     }
 
-    /** Android 10+: izin gerekmez; dosya İndirilenler klasörüne MediaStore ile yazılır. */
     @SuppressLint("NewApi")
-    private fun mediaSink(name: String): Sink? {
+    private fun moveToDownloads(f: File): Boolean {
         val r = contentResolver
-        val ext = name.substringAfterLast('.', "").lowercase()
+        val ext = f.name.substringAfterLast('.', "").lowercase()
         val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
         val v = ContentValues()
-        v.put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+        v.put(MediaStore.MediaColumns.DISPLAY_NAME, f.name)
         v.put(MediaStore.MediaColumns.MIME_TYPE, mime)
         v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         v.put(MediaStore.MediaColumns.IS_PENDING, 1)
-        val uri = r.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v) ?: return null
-        val os = try { r.openOutputStream(uri) } catch (e: Exception) { null }
-        if (os == null) {
-            r.delete(uri, null, null)
-            return null
+        val uri = r.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v) ?: return false
+        return try {
+            val os = r.openOutputStream(uri) ?: throw java.io.IOException("no stream")
+            os.use { out -> f.inputStream().use { it.copyTo(out, 256 * 1024) } }
+            v.clear()
+            v.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            r.update(uri, v, null, null)
+            f.delete()
+            true
+        } catch (e: Exception) {
+            try { r.delete(uri, null, null) } catch (e2: Exception) { }
+            false
         }
-        return Sink(
-            os,
-            {
-                v.clear()
-                v.put(MediaStore.MediaColumns.IS_PENDING, 0)
-                r.update(uri, v, null, null) > 0
-            },
-            { r.delete(uri, null, null) },
-            false,
-        )
-    }
-
-    /** İndirilenler klasörüne doğrudan dosya olarak yazar (Android 8/9 depolama izni, Android 11+ tüm dosyalar izni). */
-    @Suppress("DEPRECATION")
-    private fun rootSink(name: String): Sink? {
-        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        if (!dir.isDirectory && !dir.mkdirs()) return null
-        val tmp = File(dir, "$name.${UUID.randomUUID().toString().take(8)}.part")
-        val os = try { FileOutputStream(tmp) } catch (e: Exception) { return null }
-        return Sink(
-            os,
-            {
-                val dest = File(dir, name)
-                dest.delete()
-                val moved = tmp.renameTo(dest)
-                if (moved) MediaScannerConnection.scanFile(this, arrayOf(dest.path), null, null) else tmp.delete()
-                moved
-            },
-            { tmp.delete() },
-        )
     }
 
     // ------------------------------------------------------------------ notifications
 
     private fun show(text: String, pct: Int) {
         try {
-            val n = nb.setContentText(text).setProgress(if (pct >= 0) 100 else 0, pct.coerceAtLeast(0), false).build()
-            getSystemService(NotificationManager::class.java).notify(1, n)
+            val b = nb.setContentText(text)
+            if (pct >= 0) b.setProgress(100, pct, false) else b.setProgress(0, 0, false)
+            getSystemService(NotificationManager::class.java).notify(1, b.build())
         } catch (e: Exception) {
             // bildirim izni yoksa servis yine de çalışır
         }
     }
 
+    /** Alma sürüyor: belirsiz ilerleme çubuğu (Rust yüzde bildirmez); sonuç gelene kadar "bekliyor"a dönülmez. */
+    private fun busy(text: String) {
+        ui.post {
+            ui.removeCallbacks(backToWaiting)
+            try {
+                val n = nb.setContentText(text).setProgress(0, 0, true).build()
+                getSystemService(NotificationManager::class.java).notify(1, n)
+            } catch (e: Exception) { }
+        }
+    }
+
+    /** Sonuç metni; 4 sn sonra "bekliyor"a döner. */
     private fun status(text: String, pct: Int) {
         ui.post {
             ui.removeCallbacks(backToWaiting)
             show(text, pct)
             if (pct < 0) ui.postDelayed(backToWaiting, 4000)
         }
-    }
-
-    /** İlerleme güncellemesi: en fazla ~4/sn, %100 her zaman geçer. */
-    private fun progress(text: String, pct: Int) {
-        val now = SystemClock.elapsedRealtime()
-        if (pct < 100 && now - lastProgress < 250) return
-        lastProgress = now
-        status(text, pct)
     }
 
     private fun notifyReceived(name: String) {

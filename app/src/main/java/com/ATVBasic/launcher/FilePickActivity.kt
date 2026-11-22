@@ -23,13 +23,13 @@ import android.widget.TextView
 import java.io.File
 
 /**
- * Launcher'ın kendi dosya seçicisi (uzaktan kumanda ile gezilir). Ana ekrandaki paylaş simgesine
+ * Launcher'ın kendi dosya seçicisi (uzaktan kumanda ile gezilir; klasör listeleme Rust'ta). Ana ekrandaki paylaş simgesine
  * uzun basınca açılır. OK: klasöre gir / dosyayı seç-bırak. Bir dosyada OK'e (ya da dokunmatikte dosyaya) basılı tutmak dosyayı varsayılan uygulamayla açar. En üstteki "Gönder" satırı seçilen
  * dosyaları paylaşımı açık tüm cihazlara yollar ([ShareSendService]). Geri: üst klasör, kökte kapanır.
  */
 class FilePickActivity : Activity() {
 
-    private class Row(val kind: Int, val file: File?) // 0 gönder, 1 üst klasör, 2 klasör, 3 dosya
+    private class Row(val kind: Int, val file: File?, val size: Long = 0L) // 0 gönder, 1 üst klasör, 2 klasör, 3 dosya
 
     private val rows = ArrayList<Row>()
     private val selected = LinkedHashSet<String>()
@@ -73,7 +73,7 @@ class FilePickActivity : Activity() {
                     val on = selected.contains(r.file!!.path)
                     if (on) color = getColor(R.color.focus)
                     (if (on) "[x]  " else "[  ]  ") + r.file.name + "   " +
-                        Formatter.formatShortFileSize(this@FilePickActivity, r.file.length())
+                        Formatter.formatShortFileSize(this@FilePickActivity, r.size)
                 }
             }
             t.setTextColor(color)
@@ -147,14 +147,13 @@ class FilePickActivity : Activity() {
         rows.add(Row(0, null))
         if (d.path != root.path) rows.add(Row(1, null))
 
-        val all = d.listFiles()
+        // Klasör listeleme Rust'ta: gizliler hariç, önce klasörler, sonra dosyalar, ada göre sıralı.
+        val all = Native.listDir(d)
         if (all == null) {
             infoView.text = getString(R.string.pick_unreadable)
         } else {
             infoView.text = getString(R.string.pick_hint)
-            val vis = all.filter { !it.name.startsWith(".") }
-            vis.filter { it.isDirectory }.sortedBy { it.name.lowercase() }.forEach { rows.add(Row(2, it)) }
-            vis.filter { it.isFile }.sortedBy { it.name.lowercase() }.forEach { rows.add(Row(3, it)) }
+            for (e in all) rows.add(Row(if (e.isDir) 2 else 3, File(d, e.name), e.size))
         }
         titleView.text = if (d.path == root.path) getString(R.string.pick_root) else d.path.removePrefix(root.path)
         adapter.notifyDataSetChanged()

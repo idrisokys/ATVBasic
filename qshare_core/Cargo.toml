@@ -1,0 +1,14 @@
+[package]
+name = "qshare_core"
+version = "0.1.0"
+edition = "2021"
+description = "Hızlı Paylaş ve klasör eşitleme çekirdeği: Plan (macOS, C ABI) ve MyLauncher (Android, JNI) için tek ortak Rust kodu"
+publish = false
+
+# Bağımlılık yok: yalnızca std. Böylece çevrimdışı derlenir, hem staticlib (Plan) hem cdylib (Android)
+# içine sorunsuz gömülür ve CI'da ek kurulum gerekmez.
+[dependencies]
+
+[lib]
+name = "qshare_core"
+crate-type = ["rlib"]
