@@ -61,10 +61,11 @@
     <string name="notice_received">Dosya alındı</string>
     <string name="notice_sent">Dosya gönderildi</string>
     <string name="notice_send_failed">Dosya gönderilemedi</string>
-    <string name="pick_send">▶  Gönder (%1$d dosya)</string>
+    <string name="pick_menu_open">Aç</string>
+    <string name="pick_menu_send">Gönder</string>
     <string name="pick_up">↑  Üst klasör</string>
     <string name="pick_root">Ana dizin</string>
-    <string name="pick_hint">OK: klasöre gir / dosya seç · OK basılı tut: dosyayı aç · Geri: üst klasör</string>
+    <string name="pick_hint">OK: klasöre gir / dosya seç · Sol tuş: Aç veya Gönder · Geri: üst klasör</string>
     <string name="pick_open_failed">Bu dosyayı açacak uygulama yok</string>
     <string name="pick_none">Önce dosya seç</string>
     <string name="pick_unreadable">Klasör okunamadı (Tüm dosyalara erişim izni gerekli)</string>

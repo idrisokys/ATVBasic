@@ -1,6 +1,8 @@
 package com.ATVBasic.launcher
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.app.Dialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -24,12 +26,14 @@ import java.io.File
 
 /**
  * Launcher'ın kendi dosya seçicisi (uzaktan kumanda ile gezilir; klasör listeleme Rust'ta). Ana ekrandaki dock'un sabit 6.
- * simgesi (Dosyalar) ile açılır. OK: klasöre gir / dosyayı seç-bırak. Bir dosyada OK'e (ya da dokunmatikte dosyaya) basılı tutmak dosyayı varsayılan uygulamayla açar. En üstteki "Gönder" satırı seçilen
- * dosyaları paylaşımı açık tüm cihazlara yollar ([ShareSendService]). Geri: üst klasör, kökte kapanır.
+ * simgesi (Dosyalar) ile açılır ve varsayılan olarak İndirilenler (Download) klasöründen başlar; dosyalar en yeniden eskiye sıralıdır.
+ * OK: klasöre gir / dosyayı seç-bırak. Bir dosyadayken SOL tuşu "Aç / Gönder" menüsünü açar: Aç dosyayı varsayılan uygulamayla
+ * açar, Gönder seçili dosyaları (seçim yoksa üzerindeki dosyayı) paylaşımı açık tüm cihazlara yollar ([ShareSendService]).
+ * Geri: üst klasör, depolama kökünde kapanır.
  */
 class FilePickActivity : Activity() {
 
-    private class Row(val kind: Int, val file: File?, val size: Long = 0L) // 0 gönder, 1 üst klasör, 2 klasör, 3 dosya
+    private class Row(val kind: Int, val file: File?, val size: Long = 0L) // 1 üst klasör, 2 klasör, 3 dosya
 
     private val rows = ArrayList<Row>()
     private val selected = LinkedHashSet<String>()
@@ -38,6 +42,7 @@ class FilePickActivity : Activity() {
     private lateinit var list: ListView
     private lateinit var titleView: TextView
     private lateinit var infoView: TextView
+    private var menu: Dialog? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -59,11 +64,6 @@ class FilePickActivity : Activity() {
             var color = getColor(R.color.text)
             t.setTypeface(null, Typeface.NORMAL)
             t.text = when (r.kind) {
-                0 -> {
-                    t.setTypeface(null, Typeface.BOLD)
-                    color = getColor(if (selected.isEmpty()) R.color.text_dim else R.color.focus)
-                    getString(R.string.pick_send, selected.size)
-                }
                 1 -> {
                     color = getColor(R.color.text_dim)
                     getString(R.string.pick_up)
@@ -85,7 +85,7 @@ class FilePickActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         root = Environment.getExternalStorageDirectory()
-        dir = root
+        dir = startDir()
 
         titleView = TextView(this).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
@@ -104,8 +104,9 @@ class FilePickActivity : Activity() {
             isVerticalScrollBarEnabled = false
             setSelector(R.drawable.focus_cell)
             adapter = this@FilePickActivity.adapter
-            setOnItemClickListener { _, _, pos, _ -> if (!swallowClick) onRow(rows[pos]) }
-            setOnItemLongClickListener { _, _, pos, _ -> openFile(rows[pos]); true }
+            setOnItemClickListener { _, _, pos, _ -> onRow(rows[pos]) }
+            // Dokunmatik: dosyaya uzun basınca da aynı Aç / Gönder menüsü (kumandada SOL tuşu).
+            setOnItemLongClickListener { _, _, pos, _ -> showMenu(pos) }
         }
         setContentView(
             LinearLayout(this).apply {
@@ -123,7 +124,7 @@ class FilePickActivity : Activity() {
                 android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
             ) { goBack() }
         }
-        load(root, null)
+        load(dir, null)
         list.requestFocus()
     }
 
@@ -144,22 +145,31 @@ class FilePickActivity : Activity() {
     private fun load(d: File, cameFrom: File?) {
         dir = d
         rows.clear()
-        rows.add(Row(0, null))
         if (d.path != root.path) rows.add(Row(1, null))
 
-        // Klasör listeleme Rust'ta: gizliler hariç, önce klasörler, sonra dosyalar, ada göre sıralı.
+        // Klasör listeleme Rust'ta (gizliler hariç). Burada klasörler üstte kalır, dosyalar en yeniden eskiye dizilir.
         val all = Native.listDir(d)
         if (all == null) {
             infoView.text = getString(R.string.pick_unreadable)
         } else {
             infoView.text = getString(R.string.pick_hint)
-            for (e in all) rows.add(Row(if (e.isDir) 2 else 3, File(d, e.name), e.size))
+            val dirs = ArrayList<Row>()
+            val files = ArrayList<Pair<Long, Row>>()
+            for (e in all) {
+                val f = File(d, e.name)
+                if (e.isDir) dirs.add(Row(2, f)) else files.add(f.lastModified() to Row(3, f, e.size))
+            }
+            rows.addAll(dirs)
+            files.sortByDescending { it.first }
+            for ((_, r) in files) rows.add(r)
         }
         titleView.text = if (d.path == root.path) getString(R.string.pick_root) else d.path.removePrefix(root.path)
         adapter.notifyDataSetChanged()
 
-        // İlk satır "Gönder"; odak ilk klasör/dosyaya (ya da geldiğimiz klasöre) düşer.
-        var pos = rows.indexOfFirst { it.kind >= 2 }.let { if (it < 0) 0 else it }
+        // Odak: geldiğimiz klasöre; yoksa en yeni dosyaya; o da yoksa ilk klasöre.
+        var pos = rows.indexOfFirst { it.kind == 3 }
+        if (pos < 0) pos = rows.indexOfFirst { it.kind >= 2 }
+        if (pos < 0) pos = 0
         if (cameFrom != null) {
             val k = rows.indexOfFirst { it.file?.path == cameFrom.path }
             if (k >= 0) pos = k
@@ -167,31 +177,48 @@ class FilePickActivity : Activity() {
         list.setSelection(pos)
     }
 
-    // Uzaktan kumandada OK'e basılı tutma: ListView bunu uzun tıklama saymaz, tuşları kendimiz izleriz.
-    private var longDone = false
-    private var swallowClick = false
+    /** İndirilenler klasörü (varsa) başlangıç klasörüdür; yoksa depolama kökü. */
+    @Suppress("DEPRECATION")
+    private fun startDir(): File {
+        val dl = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        return if (dl != null && dl.isDirectory && (dl.path == root.path || dl.path.startsWith(root.path + "/"))) dl else root
+    }
 
+    // SOL tuşu: dosya satırındayken "Aç / Gönder" menüsü.
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
-        val k = e.keyCode
-        if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_NUMPAD_ENTER) {
-            if (e.action == KeyEvent.ACTION_DOWN) {
-                if (e.repeatCount == 0) longDone = false
-                else if (!longDone) {
-                    longDone = true
-                    val pos = list.selectedItemPosition
-                    if (pos in rows.indices) openFile(rows[pos])
-                    return true
-                } else return true
-            } else if (e.action == KeyEvent.ACTION_UP && longDone) {
-                // Basılı tutma dosyayı açtı; tuş bırakılınca normal tıklama (seç/bırak) çalışmasın.
-                swallowClick = true
-                try { return super.dispatchKeyEvent(e) } finally {
-                    swallowClick = false
-                    longDone = false
-                }
-            }
+        if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && menu == null) {
+            if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0 && showMenu(list.selectedItemPosition)) return true
+            if (isFileRowFocused()) return true // tuş bırakma / tekrar olaylarını yut
         }
         return super.dispatchKeyEvent(e)
+    }
+
+    private fun isFileRowFocused(): Boolean {
+        val pos = list.selectedItemPosition
+        return pos in rows.indices && rows[pos].kind == 3
+    }
+
+    /** Odaktaki dosya için "Aç" ve "Gönder" seçeneklerini gösterir; dosya satırında değilse false. */
+    private fun showMenu(pos: Int): Boolean {
+        if (pos !in rows.indices || rows[pos].kind != 3) return false
+        val row = rows[pos]
+        menu?.dismiss()
+        menu = AlertDialog.Builder(this, R.style.Theme_ATVBasic_Dialog)
+            .setTitle(row.file!!.name)
+            .setItems(arrayOf(getString(R.string.pick_menu_open), getString(R.string.pick_menu_send))) { _, which ->
+                if (which == 0) openFile(row) else send(row)
+            }
+            .create()
+            .also {
+                it.setOnDismissListener { menu = null }
+                it.show()
+            }
+        return true
+    }
+
+    override fun onDestroy() {
+        menu?.dismiss()
+        super.onDestroy()
     }
 
     /** Dosyayı sistemin varsayılan açma eylemiyle (ACTION_VIEW) açar; klasör ve diğer satırlarda bir şey yapmaz. */
@@ -210,7 +237,6 @@ class FilePickActivity : Activity() {
 
     private fun onRow(r: Row) {
         when (r.kind) {
-            0 -> send()
             1 -> goBack()
             2 -> load(r.file!!, null)
             else -> {
@@ -221,8 +247,12 @@ class FilePickActivity : Activity() {
         }
     }
 
-    private fun send() {
-        if (selected.isEmpty()) {
+    private var pending: ArrayList<String> = ArrayList()
+
+    /** Seçili dosyaları gönderir; hiç seçim yoksa menüyü açtığın dosyayı gönderir. */
+    private fun send(focused: Row) {
+        pending = if (selected.isNotEmpty()) ArrayList(selected) else ArrayList(listOfNotNull(focused.file?.path))
+        if (pending.isEmpty()) {
             Notice.show(this, getString(R.string.pick_none))
             return
         }
@@ -251,7 +281,7 @@ class FilePickActivity : Activity() {
     }
 
     private fun go() {
-        if (!ShareSendService.startPaths(this, ArrayList(selected))) {
+        if (!ShareSendService.startPaths(this, pending)) {
             Notice.show(this, getString(R.string.notice_send_failed))
             return
         }
