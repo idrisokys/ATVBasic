@@ -40,6 +40,11 @@ Gereksiz hiçbir şey yok: duvar kağıdı, saat, tarih ve favori uygulamaların
 - **Dosya seçip gönderme:** dock'taki sabit **6. simge (Dosyalar)** launcher'ın kendi dosya yöneticisini açar. Yönetici **İndirilenler** klasöründen başlar, dosyalar **en yeniden eskiye** sıralıdır. Bir dosyadayken **Sol** tuşa basınca **Aç / Gönder** menüsü çıkar: *Aç* dosyayı varsayılan uygulamayla açar, *Gönder* seçili dosyaları (seçim yoksa o dosyayı) paylaşımı açık cihazlara yollar. OK ile dosya seçilip işaretlenir
 - **Dosya gönderme:** dosya yöneticisinde bir ya da birkaç dosya seç → **Paylaş → "Açık cihazlara gönder"**. Dosyalar, aynı ağda o an paylaşımı açık olan tüm cihazlara otomatik gönderilir (cihaz seçme ekranı yoktur); sonuç ekranda kısa bir mesajla ve bildirimle gösterilir
 
+### 📦 APK kurma
+- Dosya yöneticisinde (6. simge) bir `.apk` dosyasına gel, **Sol** tuş → **Aç** de: sistemin paket yükleyicisi açılır
+- İlk seferde Android "Bilinmeyen uygulamaları yükle" ekranını açar; ATV Basic için izni aç, **Geri** ile dönüp **Aç**'ı tekrarla
+- İzin ekranı TV'de yoksa: `adb shell appops set io.github.idrisokys.atvbasic REQUEST_INSTALL_PACKAGES allow`
+
 ### ⚙️ Ayarlar
 - Ayarlar simgesine basınca doğrudan cihazın sistem ayarları açılır
 

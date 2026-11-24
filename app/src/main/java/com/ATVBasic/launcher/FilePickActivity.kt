@@ -225,6 +225,21 @@ class FilePickActivity : Activity() {
     private fun openFile(r: Row) {
         if (r.kind != 3) return
         val f = r.file ?: return
+        // APK: "Bilinmeyen uygulamaları yükle" izni yoksa önce o ayar ekranını aç.
+        if (f.name.endsWith(".apk", ignoreCase = true) &&
+            Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()
+        ) {
+            try {
+                startActivity(
+                    Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                        .setData(android.net.Uri.parse("package:$packageName")),
+                )
+                Notice.show(this, getString(R.string.pick_install_permission))
+            } catch (e: Exception) {
+                Notice.show(this, getString(R.string.pick_open_failed))
+            }
+            return
+        }
         try {
             val i = Intent(Intent.ACTION_VIEW)
                 .setDataAndType(OpenProvider.uriFor(this, f), OpenProvider.mimeOf(f.name))

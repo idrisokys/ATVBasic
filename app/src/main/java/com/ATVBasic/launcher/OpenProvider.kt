@@ -27,6 +27,7 @@ class OpenProvider : ContentProvider() {
 
         fun mimeOf(name: String): String {
             val ext = name.substringAfterLast('.', "").lowercase()
+            if (ext == "apk") return "application/vnd.android.package-archive"
             return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
         }
     }

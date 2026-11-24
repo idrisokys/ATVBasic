@@ -25,6 +25,9 @@
     <!-- Share menu "Duvar kağıdı yap": sets the system home / lock screen wallpaper. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
 
+    <!-- Dosya yöneticisinden .apk dosyalarını kurabilmek için (Android 8+: "Bilinmeyen uygulamaları yükle" izni). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Needed to open the system uninstall dialog (Android 9+). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
